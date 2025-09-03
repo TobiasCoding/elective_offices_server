@@ -50,12 +50,12 @@
         {% endif %}
       </td>
       <td class="right">
-        <!-- Single action: Sync & Calc (rightmost). 
+        <!-- Single action: Prep & Calc (rightmost). 
              Uses data-* attributes from the row for payload. -->
         <button class="btn primary sync-btn" type="button" data-year="{{ row.year }}"
           data-type="{{ row.election_type }}" data-category="{{ row.category }}" data-office="{{ row.office }}"
           data-method="{{ row.method }}" title="Synchronize sources and calculate results">
-          Sync &amp; Calc
+          Prep &amp; Calc
         </button>
         <span class="spinner" aria-hidden="true" title="Processing"></span>
       </td>
@@ -148,7 +148,7 @@
       const table = document.getElementById("results-table");
       const tbody = table.querySelector("tbody");
 
-      // --- Sync & Calc action handler (FIX: URL y finally) ---
+      // --- Prep & Calc action handler (FIX: URL y finally) ---
       tbody.addEventListener("click", async (ev) => {
         const btn = ev.target.closest(".sync-btn");
         if (!btn) return;
@@ -181,7 +181,7 @@
           btn.textContent = "Queued ✓";
         } catch (e) {
           console.error(e);
-          alert("Sync & Calc failed. Check logs.");
+          alert("Prep & Calc failed. Check logs.");
         } finally {
           // UI: loading off (siempre)
           if (spin) spin.style.display = "none";
