@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{ title or "Elective Office" }}</title>
+  <style>
+    :root {
+      --bg: #0b0c10;
+      --fg: #e6edf3;
+      --panel: #111217;
+      --line: #2a2f3a;
+      --muted: #9aa7bd;
+      --accent: #1b873f;
+      --warn: #a66b00;
+      --danger: #a5484a;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+    }
+
+    header,
+    footer {
+      padding: 12px 16px;
+      background: var(--panel);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    main {
+      padding: 16px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    a {
+      color: #7dcfff;
+      text-decoration: none;
+    }
+
+    h2,
+    h3,
+    h4 {
+      margin: 8px 0 12px;
+    }
+
+    small.mono {
+      color: var(--muted);
+    }
+
+    .row {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .col {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .grid {
+      display: grid;
+      gap: 16px;
+    }
+
+    .grid.two {
+      grid-template-columns: 1fr 1fr;
+      align-items: start;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      background: #0f1117;
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    input,
+    select,
+    textarea {
+      background: #0f1117;
+      color: var(--fg);
+      border: 1px solid var(--line);
+      padding: 8px 10px;
+      border-radius: 8px;
+      width: 100%;
+    }
+
+    label {
+      display: block;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #0f1117;
+      color: var(--fg);
+      cursor: pointer;
+    }
+
+    .btn:hover {
+      background: #121522;
+    }
+
+    .btn.ok {
+      border-color: var(--accent);
+      color: #b7ffce;
+    }
+
+    .btn.warn {
+      border-color: var(--warn);
+      color: #ffd18a;
+    }
+
+    .btn.danger {
+      border-color: var(--danger);
+      color: #ffb3b5;
+    }
+
+    .badge {
+      padding: 2px 6px;
+      border-radius: 6px;
+      border: 1px solid var(--line);
+      font-size: 12px;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .twrap {
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px;
+      vertical-align: top;
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+
+    th {
+      background: #171a22;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+
+    .actions .btn {
+      padding: 6px 8px;
+    }
+
+    /* Chips de selección */
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .chip {
+      border: 1px solid var(--line);
+      padding: 6px 10px;
+      border-radius: 999px;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .chip:hover {
+      background: #121522;
+    }
+
+    .chip.sel {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent) inset;
+    }
+
+    /* Modal */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, .55);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+
+    .modal {
+      width: min(720px, 92vw);
+      background: #0f1117;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 16px;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, .5);
+    }
+
+    .modal header {
+      position: unset;
+      background: transparent;
+      padding: 0;
+    }
+
+    .modal .close {
+      margin-left: auto;
+    }
+  </style>
+</head>
+
+<body>
+  <header class="row" style="justify-content: space-between;">
+    <div class="row" style="gap:12px;">
+      <strong>Elective Office</strong>
+      <span class="badge">APE - JF1 La Plata</span>
+    </div>
+    <nav class="row">
+      <a class="btn" href="/elective_office/">Inicio</a>
+      <a class="btn" href="/elective_office/config">Config</a>
+    </nav>
+  </header>
+  <main>
+    {% block content %}{% endblock %}
+  </main>
+  <footer>
+    <small class="mono">/elective_office — {{ now }}</small>
+  </footer>
+</body>
+
+</html>

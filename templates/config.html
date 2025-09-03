@@ -1,0 +1,531 @@
+{% extends "layout.html" %}
+{% block content %}
+<h2>Configuration</h2>
+
+<div class="grid">
+    <!-- 1) Año + listado interactivo -->
+    <section class="col card">
+        <div class="row" style="justify-content:space-between; align-items:flex-end; gap:12px;">
+            <h3>1) Year</h3>
+            <div class="row" style="gap:8px; align-items:center;">
+                {% if flt_year %}
+                <button type="button" class="btn warn" id="btnYearRename" data-year="{{ flt_year }}">Rename</button>
+                <button type="button" class="btn danger" id="btnYearDelete" data-year="{{ flt_year }}">Delete</button>
+                {% endif %}
+                <button type="button" class="btn ok" id="btnYearCreate">Create</button>
+            </div>
+        </div>
+
+        <div class="chips">
+            {% for y in years %}
+            <span class="chip {% if y==flt_year %}sel{% endif %}" data-pick="year" data-value="{{ y }}">{{ y }}</span>
+            {% else %}
+            <span class="muted">—</span>
+            {% endfor %}
+        </div>
+
+        <!-- Formularios ocultos para acciones de Año -->
+        <form id="frmRenameYear" method="post" action="/elective_office/config/rename_year" style="display:none;">
+            <input type="hidden" name="old_year" id="oldYearField" />
+            <input type="hidden" name="new_year" id="newYearField" />
+            <button type="submit">submit</button>
+        </form>
+        <form id="frmDeleteYear" method="post" action="/elective_office/config/delete_year" style="display:none;">
+            <input type="hidden" name="year" id="delYearField" />
+            <button type="submit">submit</button>
+        </form>
+        <script>
+            (function () {
+                const $ren = document.getElementById('btnYearRename');
+                const $del = document.getElementById('btnYearDelete');
+                if ($ren) {
+                    $ren.addEventListener('click', () => {
+                        const oldYear = $ren.dataset.year;
+                        const proposed = prompt(`Nuevo valor para el año ${oldYear}:`, oldYear);
+                        if (!proposed) return;
+                        const trimmed = proposed.trim();
+                        if (!/^\d{4}$/.test(trimmed)) {
+                            alert('El año debe tener 4 dígitos.');
+                            return;
+                        }
+                        document.getElementById('oldYearField').value = oldYear;
+                        document.getElementById('newYearField').value = trimmed;
+                        document.getElementById('frmRenameYear').submit();
+                    });
+                }
+                if ($del) {
+                    $del.addEventListener('click', () => {
+                        const year = $del.dataset.year;
+                        if (!confirm(`¿Eliminar el año ${year}? Se perderá toda su configuración.`)) return;
+                        document.getElementById('delYearField').value = year;
+                        document.getElementById('frmDeleteYear').submit();
+                    });
+                }
+            })();
+        </script>
+    </section>
+
+    {# helpers de existencia #}
+    {% set categories_for_year = (attached_categories
+        | selectattr('year','equalto', flt_year)
+        | map(attribute='category')
+        | list) %}
+    {% set has_category_for_ctx = flt_year and (categories_for_year | length > 0) and flt_category in categories_for_year %}
+
+    {# phases_for_ctx: tomar la lista de fases desde phases_summary (backend)
+        y quedarnos con la lista de la combinación año/categoría seleccionada #}
+    {% set phases_for_ctx = (phases_summary
+        | selectattr('year','equalto', flt_year)
+        | selectattr('category','equalto', flt_category)
+        | map(attribute='phases')
+        | list | first or []) %}
+    {% set has_phase_for_ctx = has_category_for_ctx and (flt_phase in phases_for_ctx) %}
+
+
+<!-- 2) Categoría + Excel — aparece solo si hay año elegido -->
+{% if flt_year %}
+{% set CATEGORY_CHOICES = ['Nacional','Provincial'] %}
+{% set existing_categories = categories_for_year %}
+{% set sel_cat_excel = (
+attached_categories
+| selectattr('year','equalto', flt_year)
+| selectattr('category','equalto', flt_category)
+| map(attribute='excel')
+| list | first
+) %}
+<section class="col card">
+    <div class="row" style="justify-content:space-between; align-items:flex-end; gap:12px;">
+        <h3>2) Category and offices</h3>
+    </div>
+
+    <!-- Chips de categoría (fijas) con indicador de existencia -->
+    <div class="chips">
+        {% for opt in CATEGORY_CHOICES %}
+        {% set exists = opt in existing_categories %}
+        <span class="chip {% if opt==flt_category %}sel{% endif %}" data-pick="category" data-value="{{ opt }}">
+            {{ opt }}{% if exists %} ✓{% endif %}
+        </span>
+        {% endfor %}
+    </div>
+
+    <!-- Acciones para la categoría seleccionada -->
+    {% if flt_category %}
+    {% set category_exists = flt_category in existing_categories %}
+    <div class="col" style="margin-top:12px; gap:12px;">
+        <div class="row" style="gap:12px; align-items:center;">
+            {% if category_exists and sel_cat_excel %}
+            <span class="muted" title="{{ sel_cat_excel }}">File: {{ sel_cat_excel }}</span>
+            {% endif %}
+        </div>
+
+{% if category_exists %}
+<div class="row" style="gap:12px; align-items:center; flex-wrap:wrap;">
+    <!-- Replace Excel -->
+    <form method="post" action="/elective_office/config/attach_category" enctype="multipart/form-data" class="row"
+        style="gap:10px; align-items:center; flex-wrap:wrap;">
+        <input type="hidden" name="year" value="{{ flt_year }}">
+        <input type="hidden" name="election_category" value="{{ flt_category }}">
+        <label style="margin:0;">Offices (xlsx/xls)
+            <input type="file" name="seats_excel" accept=".xlsx,.xls" required />
+        </label>
+        <button class="btn ok" type="submit">Replace Excel</button>
+    </form>
+
+    <!-- Delete categoría -->
+    <form method="post" action="/elective_office/config/delete_category"
+        onsubmit="return confirm('Eliminar categoría y todas sus fases/oficinas?');" class="row"
+        style="align-items:center;">
+        <input type="hidden" name="year" value="{{ flt_year }}">
+        <input type="hidden" name="election_category" value="{{ flt_category }}">
+        <button class="btn danger" type="submit">Delete</button>
+    </form>
+</div>
+{% else %}
+<!-- Crear categoría -->
+<form method="post" action="/elective_office/config/attach_category" enctype="multipart/form-data" class="row"
+    style="gap:10px; align-items:center; flex-wrap:wrap;">
+    <input type="hidden" name="year" value="{{ flt_year }}">
+    <input type="hidden" name="election_category" value="{{ flt_category }}">
+    <label style="margin:0;">Offices (xlsx/xls)
+        <input type="file" name="seats_excel" accept=".xlsx,.xls" required />
+    </label>
+    <button class="btn ok" type="submit">Create</button>
+</form>
+{% endif %}
+
+
+    </div>
+    {% endif %}
+</section>
+{% endif %}
+
+
+    <!-- 3) Fase — visible si hay año y categoría válida seleccionados -->
+    {% if has_category_for_ctx %}
+    {% set PHASE_CHOICES = ['PASO','GENERAL','BALOTAJE'] %}
+    <section class="col card">
+        <div class="row" style="justify-content:space-between; align-items:flex-end;">
+            <h3>3) Phase</h3>
+        </div>
+
+        <!-- Chips de fases (muestran existencia) -->
+        <div class="chips">
+            {% for opt in PHASE_CHOICES %}
+            {% set exists = opt in phases_for_ctx %}
+            <span class="chip {% if opt==flt_phase %}sel{% endif %}" data-pick="phase" data-value="{{ opt }}">
+                {{ opt }}{% if exists %} ✓{% endif %}
+            </span>
+            {% endfor %}
+        </div>
+
+        <!-- Acciones para la fase seleccionada -->
+        {% if flt_phase %}
+        {# Chequeo local: existencia de la fase seleccionada usando phases_summary #}
+        {% set _sel = (phases_summary
+            | selectattr('year','equalto', flt_year)
+            | selectattr('category','equalto', flt_category)
+            | map(attribute='phases')
+            | list | first) %}
+        {% set sel_phases = _sel or [] %}
+        {% set phase_exists = flt_phase in sel_phases %}
+        <div class="row" style="margin-top:10px; gap:10px; align-items:center;">
+            <strong>{{ flt_phase }}</strong>
+            {% if phase_exists %}
+            <!-- Editar/Eliminar cuando la fase existe -->
+            <form method="post" action="/elective_office/config/delete_phase"
+                onsubmit="return confirm('Eliminar fase y todas sus oficinas?');">
+                <input type="hidden" name="year" value="{{ flt_year }}">
+                <input type="hidden" name="election_category" value="{{ flt_category }}">
+                <input type="hidden" name="phase" value="{{ flt_phase }}">
+                <button class="btn danger" type="submit">Delete</button>
+            </form>
+            {% else %}
+            <!-- Crear cuando la fase NO existe -->
+            <form method="post" action="/elective_office/config/create_phase" class="row" style="gap:10px;">
+                <input type="hidden" name="year" value="{{ flt_year }}">
+                <input type="hidden" name="election_category" value="{{ flt_category }}">
+                <input type="hidden" name="phase" value="{{ flt_phase }}">
+                <button class="btn ok" type="submit">Create</button>
+            </form>
+            {% endif %}
+        </div>
+        {% endif %}
+    </section>
+    {% endif %}
+
+    <!-- 4) CRUD URLs — visible si hay fase válida seleccionada -->
+    {% if has_phase_for_ctx %}
+    <section class="col card">
+        <h3>4) Data sources</h3>
+        <div class="twrap" style="margin-top:12px;">
+            <table>
+                <thead>
+                    <tr>
+                        <th style="width:8ch;">Year</th>
+                        <th style="width:12ch;">Category</th>
+                        <th style="width:12ch;">Phase</th>
+                        <th style="width:22ch;">Office</th>
+                        <th style="width:16ch;">Method</th>
+                        <th>URL</th>
+                        <th style="width:26ch;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for it in url_entries if it.year==flt_year and it.category==flt_category and it.phase==flt_phase
+                    %}
+                    <tr>
+                        <td>{{ it.year }}</td>
+                        <td>{{ it.category }}</td>
+                        <td>{{ it.phase }}</td>
+                        <td>{{ it.office }}</td>
+                        <td>{{ it.method }}</td>
+                        <td class="mono" title="{{ it.url or '-' }}">{{ it.url or '-' }}</td>
+                        <td class="actions">
+                            <div class="row" style="flex-wrap:wrap;">
+                                <button class="btn ok" type="button" data-open-url-modal data-year="{{ it.year }}"
+                                    data-category="{{ it.category }}" data-phase="{{ it.phase }}"
+                                    data-office="{{ it.office }}" data-url="{{ it.url or '' }}">Edit</button>
+
+                                <form method="post" action="/elective_office/config/preprocess">
+                                    <input type="hidden" name="year" value="{{ it.year }}">
+                                    <input type="hidden" name="election_category" value="{{ it.category }}">
+                                    <input type="hidden" name="phase" value="{{ it.phase }}">
+                                    <input type="hidden" name="office" value="{{ it.office }}">
+                                    <button class="btn" type="submit">Preprocess</button>
+                                </form>
+
+                                <form method="post" action="/elective_office/config/calc">
+                                    <input type="hidden" name="year" value="{{ it.year }}">
+                                    <input type="hidden" name="election_category" value="{{ it.category }}">
+                                    <input type="hidden" name="phase" value="{{ it.phase }}">
+                                    <input type="hidden" name="office" value="{{ it.office }}">
+                                    <button class="btn warn" type="submit">Calc</button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="muted">Sin oficinas para {{ flt_year }} / {{ flt_category }} / {{
+                            flt_phase }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+    </section>
+    {% endif %}
+</div>
+
+<!-- MODAL Edit URL -->
+<div class="modal-backdrop" id="urlModalBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="urlModalTitle">
+        <header class="row" style="justify-content: space-between;">
+            <h3 id="urlModalTitle">Editar URL</h3>
+            <button class="btn close" type="button" id="urlModalClose">✕</button>
+        </header>
+        <form class="col" method="post" action="/elective_office/config/upsert_url" id="urlForm"
+            style="margin-top:10px;">
+            <div class="grid two">
+                <label>Year <input name="year" id="urlYear" readonly /></label>
+                <label>Category <input name="election_category" id="urlCategory" readonly /></label>
+            </div>
+            <div class="grid two">
+                <label>Phase <input name="phase" id="urlPhase" readonly /></label>
+                <label>Office <input name="office" id="urlOffice" readonly /></label>
+            </div>
+            <label>URL API CSV <input name="url" id="urlValue" placeholder="http://..." /></label>
+            <div class="row" style="justify-content:flex-end; gap:10px;">
+                <button class="btn" type="button" id="urlModalCancel">Cancel</button>
+                <button class="btn ok" type="submit">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL Editar Fase -->
+<div class="modal-backdrop" id="phaseModalBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="phaseModalTitle">
+        <header class="row" style="justify-content: space-between;">
+            <h3 id="phaseModalTitle">Edit Phase</h3>
+            <button class="btn close" type="button" id="phaseModalClose">✕</button>
+        </header>
+        <form class="col" method="post" action="/elective_office/config/rename_phase" id="phaseForm"
+            style="margin-top:10px;">
+            <div class="grid two">
+                <label>Year <input name="year" id="phYear" readonly /></label>
+                <label>Category <input name="election_category" id="phCategory" readonly /></label>
+            </div>
+            <div class="grid two">
+                <label>Fase actual <input name="phase_old" id="phOld" readonly /></label>
+                <label>Fase nueva
+                    <select name="phase_new" id="phNew" required>
+                        <option value="PASO">PASO</option>
+                        <option value="GENERAL">GENERAL</option>
+                        <option value="BALOTAJE">BALOTAJE</option>
+                    </select>
+                </label>
+            </div>
+            <div class="row" style="justify-content:flex-end; gap:10px;">
+                <button class="btn" type="button" id="phaseModalCancel">Cancel</button>
+                <button class="btn ok" type="submit">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- MODAL Crear Año -->
+<div class="modal-backdrop" id="yearModalBackdrop" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="yearModalTitle">
+        <header class="row" style="justify-content: space-between;">
+            <h3 id="yearModalTitle">Create year</h3>
+            <button class="btn close" type="button" id="yearModalClose">✕</button>
+        </header>
+        <form class="col" method="post" action="/elective_office/config/create_year" id="yearForm"
+            style="margin-top:10px;">
+            <label>Year
+                <input id="yearInput" type="number" name="year" required min="1900" />
+            </label>
+            <div class="row" style="justify-content:flex-end; gap:10px;">
+                <button class="btn" type="button" id="yearModalCancel">Cancel</button>
+                <button class="btn ok" type="submit">Crear</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Navegación por chips: setea query params y recarga.
+    (function () {
+        function setParam(url, key, value) {
+            const u = new URL(url, window.location.origin);
+            if (value === null || value === "") u.searchParams.delete(key);
+            else u.searchParams.set(key, value);
+            return u.pathname + "?" + u.searchParams.toString();
+        }
+        function clearAfter(url, keyOrder, key) {
+            const u = new URL(url, window.location.origin);
+            const idx = keyOrder.indexOf(key);
+            keyOrder.slice(idx + 1).forEach(k => u.searchParams.delete(k));
+            return u.pathname + "?" + u.searchParams.toString();
+        }
+        const order = ["flt_year", "flt_category", "flt_phase"];
+
+        document.querySelectorAll('.chip[data-pick="year"]').forEach(ch => {
+            ch.addEventListener('click', () => {
+                const val = ch.dataset.value;
+                try { localStorage.setItem('flt_year', val); } catch (_) { }
+                try { localStorage.removeItem('flt_category'); localStorage.removeItem('flt_phase'); } catch (_) { }
+                let href = setParam(window.location.href, "flt_year", val);
+                href = clearAfter(href, order, "flt_year");
+                window.location.assign(href);
+            });
+        });
+        document.querySelectorAll('.chip[data-pick="category"]').forEach(ch => {
+            ch.addEventListener('click', () => {
+                const val = ch.dataset.value;
+                try { localStorage.setItem('flt_category', val); } catch (_) { }
+                try { localStorage.removeItem('flt_phase'); } catch (_) { }
+                let href = setParam(window.location.href, "flt_category", val);
+                href = clearAfter(href, order, "flt_category");
+                window.location.assign(href);
+            });
+        });
+        document.querySelectorAll('.chip[data-pick="phase"]').forEach(ch => {
+            ch.addEventListener('click', () => {
+                const val = ch.dataset.value;
+                try { localStorage.setItem('flt_phase', val); } catch (_) { }
+                const href = setParam(window.location.href, "flt_phase", val);
+                window.location.assign(href);
+            });
+        });
+        // Sync selección a storage
+        try {
+            const curYear = "{{ flt_year or '' }}";
+            const curCat = "{{ flt_category or '' }}";
+            const curPh = "{{ flt_phase or '' }}";
+            // Solo actualizamos cuando hay valor; no borramos si falta en la URL,
+            // para evitar blanquear filtros tras acciones como "Crear fase".
+            if (curYear) localStorage.setItem('flt_year', curYear);
+            if (curCat) localStorage.setItem('flt_category', curCat);
+            if (curPh) localStorage.setItem('flt_phase', curPh);
+        } catch (_) { }
+
+        // Auto-restaurar filtros desde localStorage si faltan en la URL
+        try {
+            const u = new URL(window.location.href, window.location.origin);
+            const hasYear = !!u.searchParams.get('flt_year');
+            const hasCat = !!u.searchParams.get('flt_category');
+            const hasPh = !!u.searchParams.get('flt_phase');
+            const stYear = localStorage.getItem('flt_year');
+            const stCat = localStorage.getItem('flt_category');
+            const stPh = localStorage.getItem('flt_phase');
+
+            let href = window.location.href;
+            let changed = false;
+            if (!hasYear && stYear) {
+                href = setParam(href, 'flt_year', stYear);
+                href = clearAfter(href, order, 'flt_year');
+                changed = true;
+            }
+            if (!hasCat && stCat) {
+                href = setParam(href, 'flt_category', stCat);
+                href = clearAfter(href, order, 'flt_category');
+                changed = true;
+            }
+            if (!hasPh && stPh) {
+                href = setParam(href, 'flt_phase', stPh);
+                changed = true;
+            }
+            if (changed) {
+                // replace para evitar acumular historial
+                window.location.replace(href);
+            }
+        } catch (_) { }
+    })();
+
+    // ---- URL modal ----
+    (() => {
+        const $urlBack = document.getElementById('urlModalBackdrop');
+        const $urlClose = document.getElementById('urlModalClose');
+        const $urlCancel = document.getElementById('urlModalCancel');
+        const $year = document.getElementById('urlYear');
+        const $cat = document.getElementById('urlCategory');
+        const $ph = document.getElementById('urlPhase');
+        const $off = document.getElementById('urlOffice');
+        const $val = document.getElementById('urlValue');
+
+        function openURLModal(payload) {
+            $year.value = payload.year || '';
+            $cat.value = payload.category || '';
+            $ph.value = payload.phase || '';
+            $off.value = payload.office || '';
+            $val.value = payload.url || '';
+            $urlBack.style.display = 'flex';
+            $val.focus();
+        }
+        function closeURLModal() { $urlBack.style.display = 'none'; }
+        document.querySelectorAll('[data-open-url-modal]').forEach(btn => {
+            btn.addEventListener('click', () => openURLModal({
+                year: btn.dataset.year, category: btn.dataset.category,
+                phase: btn.dataset.phase, office: btn.dataset.office, url: btn.dataset.url
+            }));
+        });
+        document.getElementById('urlModalClose').addEventListener('click', closeURLModal);
+        document.getElementById('urlModalCancel').addEventListener('click', closeURLModal);
+        $urlBack.addEventListener('click', (e) => { if (e.target === $urlBack) closeURLModal(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeURLModal(); });
+    })();
+
+    // ---- Phase modal ----
+    (() => {
+        const $phBack = document.getElementById('phaseModalBackdrop');
+        const $phClose = document.getElementById('phaseModalClose');
+        const $phCancel = document.getElementById('phaseModalCancel');
+        const $phYear = document.getElementById('phYear');
+        const $phCat = document.getElementById('phCategory');
+        const $phOld = document.getElementById('phOld');
+        const $phNew = document.getElementById('phNew');
+
+        function openPhaseModal(payload) {
+            $phYear.value = payload.year || '';
+            $phCat.value = payload.category || '';
+            $phOld.value = payload.phase || '';
+            $phNew.value = payload.phase || 'PASO';
+            $phBack.style.display = 'flex';
+            $phNew.focus();
+        }
+        function closePhaseModal() { $phBack.style.display = 'none'; }
+        document.querySelectorAll('[data-open-phase-modal]').forEach(btn => {
+            btn.addEventListener('click', () => openPhaseModal({
+                year: btn.dataset.year, category: btn.dataset.category, phase: btn.dataset.phase
+            }));
+        });
+        $phClose.addEventListener('click', closePhaseModal);
+        $phCancel.addEventListener('click', closePhaseModal);
+        $phBack.addEventListener('click', (e) => { if (e.target === $phBack) closePhaseModal(); });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePhaseModal(); });
+    })();
+
+    // ---- Year modal ----
+    (() => {
+        const $yBack = document.getElementById('yearModalBackdrop');
+        const $yClose = document.getElementById('yearModalClose');
+        const $yCancel = document.getElementById('yearModalCancel');
+        const $yInput = document.getElementById('yearInput');
+        function openYearModal() {
+            if ($yInput) { $yInput.value = ''; }
+            if ($yBack) { $yBack.style.display = 'flex'; }
+            if ($yInput) { $yInput.focus(); }
+        }
+        function closeYearModal() { if ($yBack) { $yBack.style.display = 'none'; } }
+        const $btn = document.getElementById('btnYearCreate');
+        if ($btn) { $btn.addEventListener('click', openYearModal); }
+        if ($yClose) { $yClose.addEventListener('click', closeYearModal); }
+        if ($yCancel) { $yCancel.addEventListener('click', closeYearModal); }
+        if ($yBack) { $yBack.addEventListener('click', (e) => { if (e.target === $yBack) closeYearModal(); }); }
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeYearModal(); });
+    })();
+</script>
+{% endblock %}

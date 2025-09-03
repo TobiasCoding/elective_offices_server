@@ -1,0 +1,60 @@
+{
+  "2025": {
+    "categories": {
+      "Nacional": {
+        "seats_excel": "files/2025__Nacional.xlsx",
+        "phases": {
+          "PASO": {
+            "entries": {
+              "presidente y vice": {
+                "method": "balotaje",
+                "url": null,
+                "seats": null,
+                "base_sha256": null,
+                "last_processed": null,
+                "last_calc": null,
+                "result": null
+              },
+              "diputados": {
+                "method": "d-hont",
+                "url": "http://resultados.mininterior.gob.ar/api/resultado/totalizadocsv?a%C3%B1o=2023&recuento=Provisorio&idEleccion=2&idCargo=3&idDistrito=2",
+                "seats": null,
+                "base_sha256": null,
+                "last_processed": null,
+                "last_calc": null,
+                "result": null
+              },
+              "senadores": {
+                "method": "lista-incompleta",
+                "url": null,
+                "seats": null,
+                "base_sha256": null,
+                "last_processed": null,
+                "last_calc": null,
+                "result": null
+              },
+              "parlamentarios nacionales": {
+                "method": "d-hont",
+                "url": null,
+                "seats": null,
+                "base_sha256": null,
+                "last_processed": null,
+                "last_calc": null,
+                "result": null
+              },
+              "parlamentarios regionales": {
+                "method": "mayoria-simple",
+                "url": null,
+                "seats": null,
+                "base_sha256": null,
+                "last_processed": null,
+                "last_calc": null,
+                "result": null
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

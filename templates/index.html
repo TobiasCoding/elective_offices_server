@@ -1,0 +1,93 @@
+{% extends "layout.html" %} {% block content %}
+<h2>Resultados procesados</h2>
+<p>Si una categoría no fue parseada aún, verás "-" en su lugar.</p>
+<table>
+  <thead>
+    <tr>
+      <th>Año</th>
+      <th style="width:22ch;">Acciones</th>
+      <th>ID Elección</th>
+      <th>Tipo</th>
+      <th>Categoría</th>
+      <th>Cargo</th>
+      <th>Método</th>
+      <th>URL API</th>
+      <th>Hash base</th>
+      <th>Últ. Calc</th>
+      <th>Resultado</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td>{{ row.year }}</td>
+      <td class="actions">
+        <button class="btn warn" type="button" data-rename-year="{{ row.year }}">Renombrar</button>
+        <button class="btn danger" type="button" data-delete-year="{{ row.year }}">Eliminar</button>
+      </td>
+      <td>{{ row.election_id }}</td>
+      <td>{{ row.election_type }}</td>
+      <td>{{ row.category }}</td>
+      <td>{{ row.office }}</td>
+      <td>{{ row.method }}</td>
+      <td class="mono">{{ row.url or '-' }}</td>
+      <td class="mono">{{ row.base_sha256 or '-' }}</td>
+      <td>{{ row.last_calc or '-' }}</td>
+      <td>
+        {% if row.result %}
+        <details>
+          <summary class="btn ok">Ver asignación</summary>
+          <pre class="mono">{{ row.result|tojson(indent=2) }}</pre>
+        </details>
+        {% else %} - {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<!-- Formularios ocultos para acciones de Año -->
+<form id="frmRenameYear" method="post" action="/elective_office/config/rename_year" style="display:none;">
+  <input type="hidden" name="old_year" id="oldYearField" />
+  <input type="hidden" name="new_year" id="newYearField" />
+  <!-- submit real se hace por JS -->
+  <button type="submit">submit</button>
+  </form>
+<form id="frmDeleteYear" method="post" action="/elective_office/config/delete_year" style="display:none;">
+  <input type="hidden" name="year" id="delYearField" />
+  <button type="submit">submit</button>
+  </form>
+
+<script>
+  (function () {
+    // Renombrar año
+    document.querySelectorAll('[data-rename-year]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const oldYear = btn.getAttribute('data-rename-year');
+        const proposed = prompt(`Nuevo valor para el año ${oldYear}:`, oldYear);
+        if (!proposed) return;
+        const trimmed = proposed.trim();
+        if (!/^\d{4}$/.test(trimmed)) {
+          alert('El año debe tener 4 dígitos.');
+          return;
+        }
+        const $frm = document.getElementById('frmRenameYear');
+        document.getElementById('oldYearField').value = oldYear;
+        document.getElementById('newYearField').value = trimmed;
+        $frm.submit();
+      });
+    });
+
+    // Eliminar año
+    document.querySelectorAll('[data-delete-year]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const year = btn.getAttribute('data-delete-year');
+        if (!confirm(`¿Eliminar el año ${year}? Se perderá toda su configuración.`)) return;
+        const $frm = document.getElementById('frmDeleteYear');
+        document.getElementById('delYearField').value = year;
+        $frm.submit();
+      });
+    });
+  })();
+</script>
+{% endblock %}

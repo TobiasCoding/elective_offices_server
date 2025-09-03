@@ -1,0 +1,5 @@
+{"method":"d-hont",           "description":"Sistema proporcional por promedios más altos (divisores 1,2,3,...); asigna bancas a listas con mayores cocientes sucesivos."}
+{"method":"hare",             "description":"Cociente Hare: cuota = votos válidos/bancas; se asignan bancas por cociente entero y los remanentes por mayores restos."}
+{"method":"lista-incompleta", "description":"Para Senado nacional: se eligen 3 por distrito; 2 bancas para la lista más votada y 1 para la primera minoría."}
+{"method":"mayoria-simple",   "description":"Gana la lista o el candidato con más votos sin exigir mayoría absoluta ni segunda vuelta."}
+{"method":"balotaje",         "description":"Presidencial (AR): se define en 1ra vuelta con >45% o ≥40% + 10 puntos; si no, segunda vuelta entre las dos fórmulas más votadas."}
