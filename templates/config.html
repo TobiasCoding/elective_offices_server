@@ -6,9 +6,10 @@
     <!-- 1) Año + listado interactivo -->
     <section class="col card">
         <div class="row" style="justify-content:space-between; align-items:flex-end; gap:12px;">
+            {% set has_year = flt_year and (flt_year in years) %}
             <h3>1) Year</h3>
             <div class="row" style="gap:8px; align-items:center;">
-                {% if flt_year %}
+                {% if has_year %}
                 <button type="button" class="btn warn" id="btnYearRename" data-year="{{ flt_year }}">Rename</button>
                 <button type="button" class="btn danger" id="btnYearDelete" data-year="{{ flt_year }}">Delete</button>
                 {% endif %}
@@ -63,6 +64,35 @@
                 }
             })();
         </script>
+<style>
+    .spinner {
+        display: none;
+        /* visible solo mientras se envía */
+        width: 14px;
+        height: 14px;
+        margin-left: 8px;
+        vertical-align: middle;
+        border: 2px solid #bbb;
+        /* borde gris */
+        border-top-color: #fff;
+        /* “sector” blanco */
+        border-radius: 50%;
+        animation: spin 0.9s linear infinite;
+    }
+
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .btn.is-loading {
+        opacity: .7;
+        pointer-events: none;
+    }
+</style>
+
+
     </section>
 
     {# helpers de existencia #}
@@ -83,7 +113,11 @@
 
 
 <!-- 2) Categoría + Excel — aparece solo si hay año elegido -->
-{% if flt_year %}
+{% if has_year %}
+<section class="col card">
+    <div class="row" style="justify-content:space-between; align-items:flex-end; gap:12px;">
+        <h3>2) Category and offices</h3>
+    </div>
 {% set CATEGORY_CHOICES = ['Nacional','Provincial'] %}
 {% set existing_categories = categories_for_year %}
 {% set sel_cat_excel = (
@@ -93,11 +127,6 @@ attached_categories
 | map(attribute='excel')
 | list | first
 ) %}
-<section class="col card">
-    <div class="row" style="justify-content:space-between; align-items:flex-end; gap:12px;">
-        <h3>2) Category and offices</h3>
-    </div>
-
     <!-- Chips de categoría (fijas) con indicador de existencia -->
     <div class="chips">
         {% for opt in CATEGORY_CHOICES %}
@@ -261,6 +290,7 @@ attached_categories
                                     <input type="hidden" name="phase" value="{{ it.phase }}">
                                     <input type="hidden" name="office" value="{{ it.office }}">
                                     <button class="btn" type="submit">Preprocess</button>
+                                    <span class="spinner" aria-hidden="true" title="Processing"></span>
                                 </form>
 
                                 <form method="post" action="/elective_office/config/calc">
@@ -269,7 +299,9 @@ attached_categories
                                     <input type="hidden" name="phase" value="{{ it.phase }}">
                                     <input type="hidden" name="office" value="{{ it.office }}">
                                     <button class="btn warn" type="submit">Calc</button>
+                                    <span class="spinner" aria-hidden="true" title="Processing"></span>
                                 </form>
+
                             </div>
                         </td>
                     </tr>
@@ -422,33 +454,49 @@ attached_categories
         } catch (_) { }
 
         // Auto-restaurar filtros desde localStorage si faltan en la URL
+        // Auto-restaurar filtros desde localStorage si faltan en la URL,
+        // pero solo si el valor existe entre los chips de años actuales.
         try {
             const u = new URL(window.location.href, window.location.origin);
             const hasYear = !!u.searchParams.get('flt_year');
             const hasCat = !!u.searchParams.get('flt_category');
             const hasPh = !!u.searchParams.get('flt_phase');
+
             const stYear = localStorage.getItem('flt_year');
             const stCat = localStorage.getItem('flt_category');
             const stPh = localStorage.getItem('flt_phase');
 
+            const yearValues = Array.from(document.querySelectorAll('.chip[data-pick="year"]'))
+                .map(x => x.dataset.value);
+
+            // Si el año guardado ya no existe, limpiar storage
+            if (stYear && !yearValues.includes(stYear)) {
+                localStorage.removeItem('flt_year');
+            }
+
             let href = window.location.href;
             let changed = false;
-            if (!hasYear && stYear) {
+
+            if (!hasYear && stYear && yearValues.includes(stYear)) {
                 href = setParam(href, 'flt_year', stYear);
                 href = clearAfter(href, order, 'flt_year');
                 changed = true;
             }
-            if (!hasCat && stCat) {
-                href = setParam(href, 'flt_category', stCat);
-                href = clearAfter(href, order, 'flt_category');
-                changed = true;
+
+            // Solo restaurar categoría/fase si corresponden; si el año no está, no las reponemos
+            if (!changed) {
+                if (!hasCat && stCat) {
+                    href = setParam(href, 'flt_category', stCat);
+                    href = clearAfter(href, order, 'flt_category');
+                    changed = true;
+                }
+                if (!hasPh && stPh) {
+                    href = setParam(href, 'flt_phase', stPh);
+                    changed = true;
+                }
             }
-            if (!hasPh && stPh) {
-                href = setParam(href, 'flt_phase', stPh);
-                changed = true;
-            }
+
             if (changed) {
-                // replace para evitar acumular historial
                 window.location.replace(href);
             }
         } catch (_) { }
@@ -536,5 +584,25 @@ attached_categories
         if ($yBack) { $yBack.addEventListener('click', (e) => { if (e.target === $yBack) closeYearModal(); }); }
         document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeYearModal(); });
     })();
+
+    // Activa spinner en forms de preprocess/calc mientras se navega
+    (function () {
+        function armSpinnerHandlers(selector) {
+            document.querySelectorAll(selector).forEach(form => {
+                form.addEventListener('submit', (ev) => {
+                    // botón que disparó el submit (si existe)
+                    const btn = ev.submitter || form.querySelector('button[type="submit"]');
+                    const spin = form.querySelector('.spinner');
+                    if (btn) btn.classList.add('is-loading');
+                    if (btn) btn.disabled = true;
+                    if (spin) spin.style.display = 'inline-block';
+                    // no prevenimos el submit: dejamos que navegue
+                });
+            });
+        }
+        armSpinnerHandlers('form[action="/elective_office/config/preprocess"]');
+        armSpinnerHandlers('form[action="/elective_office/config/calc"]');
+    })();
+
 </script>
 {% endblock %}

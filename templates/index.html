@@ -57,6 +57,7 @@
           data-method="{{ row.method }}" title="Synchronize sources and calculate results">
           Sync &amp; Calc
         </button>
+        <span class="spinner" aria-hidden="true" title="Processing"></span>
       </td>
     </tr>
     {% endfor %}
@@ -65,6 +66,17 @@
 
 <!-- Minimal styles; rely on existing .btn/.ok/.mono if defined in layout.css -->
 <style>
+    .spinner {
+    display: none;            /* visible solo mientras se envía */
+    width: 14px; height: 14px;
+    margin-left: 8px; vertical-align: middle;
+    border: 2px solid #bbb;   /* borde gris */
+    border-top-color: #fff;   /* “sector” blanco */
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .btn.is-loading { opacity: .7; pointer-events: none; }
   #results-table {
     width: 100%;
     border-collapse: collapse;
@@ -132,135 +144,69 @@
   }
 
   // --- Build filter selects using unique values found in each column ---
-  document.addEventListener("DOMContentLoaded", () => {
-    const table = document.getElementById("results-table");
-    const thead = table.querySelector("thead");
-    const filtersRow = document.getElementById("filters-row");
-    const tbody = table.querySelector("tbody");
+    document.addEventListener("DOMContentLoaded", () => {
+      const table = document.getElementById("results-table");
+      const tbody = table.querySelector("tbody");
 
-    // Column mapping (visible columns only; Actions excluded)
-    const columns = ["Year", "Type", "Category", "Office", "Method", "Last Calc", "Result"];
-    const headerCells = Array.from(thead.querySelectorAll("tr:first-child th"));
-    const colIndexByName = {};
-    columns.forEach(name => {
-      const idx = headerCells.findIndex(th => (th.textContent || "").trim() === name);
-      if (idx >= 0) colIndexByName[name] = idx;
-    });
+      // --- Sync & Calc action handler (FIX: URL y finally) ---
+      tbody.addEventListener("click", async (ev) => {
+        const btn = ev.target.closest(".sync-btn");
+        if (!btn) return;
+        const tr = btn.closest("tr");
+        const spin = tr.querySelector(".spinner");
 
-    // Collect unique values per column by scanning the current rows
-    const uniques = {};
-    columns.forEach(name => uniques[name] = new Set());
+        // UI: loading on
+        btn.classList.add("is-loading");
+        btn.disabled = true;
+        if (spin) spin.style.display = "inline-block";
 
-    Array.from(tbody.rows).forEach(tr => {
-      columns.forEach(name => {
-        const idx = colIndexByName[name];
-        if (idx == null) return;
-        const td = tr.cells[idx];
-        if (!td) return;
-        uniques[name].add(cellDisplayValue(td, name));
-      });
-    });
+        // payload desde atributos data-*
+        const payload = {
+          year: tr.getAttribute("data-year"),
+          election_type: tr.getAttribute("data-type"),
+          category: tr.getAttribute("data-category"),
+          office: tr.getAttribute("data-office"),
+          method: tr.getAttribute("data-method")
+        };
 
-    // Populate the <select> filters
-    columns.forEach(name => {
-      const th = filtersRow.querySelector(`th[data-filter-for="${name}"]`);
-      if (!th) return;
-      const sel = document.createElement("select");
-      sel.setAttribute("data-col-name", name);
+        try {
+          // FIX: URL correcta (sin /config)
+          const res = await fetch("/elective_office/config/preprocess_and_calc", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error("Request failed: " + res.status);
 
-      // "All" option
-      const optAll = document.createElement("option");
-      optAll.value = "";
-      optAll.textContent = "All";
-      sel.appendChild(optAll);
-
-      // Sorted unique options
-      const sortedVals = Array.from(uniques[name]).sort((a, b) => {
-        // Numeric sort for Year; lexical for others
-        if (name === "Year") {
-          const an = parseInt(a, 10), bn = parseInt(b, 10);
-          if (!isNaN(an) && !isNaN(bn)) return an - bn;
+          btn.textContent = "Queued ✓";
+        } catch (e) {
+          console.error(e);
+          alert("Sync & Calc failed. Check logs.");
+        } finally {
+          // UI: loading off (siempre)
+          if (spin) spin.style.display = "none";
+          btn.classList.remove("is-loading");
+          btn.disabled = false; // si preferís dejarlo deshabilitado, quitá esta línea
         }
-        return ("" + a).localeCompare("" + b);
       });
-      for (const v of sortedVals) {
-        const opt = document.createElement("option");
-        opt.value = v;
-        opt.textContent = v;
-        sel.appendChild(opt);
-      }
-
-      // Change handler triggers filtering
-      sel.addEventListener("change", applyFilters);
-      th.appendChild(sel);
     });
 
-    // Add a small "Reset" button at the end of the filters row (Actions column)
-    const actionsFilterTh = filtersRow.lastElementChild;
-    const resetBtn = document.createElement("button");
-    resetBtn.type = "button";
-    resetBtn.className = "btn";
-    resetBtn.textContent = "Reset filters";
-    resetBtn.addEventListener("click", () => {
-      filtersRow.querySelectorAll("select").forEach(s => s.value = "");
-      applyFilters();
-    });
-    actionsFilterTh.appendChild(resetBtn);
-
-    // Filtering logic: show only rows that match all selected filters
-    function applyFilters() {
-      const active = {};
-      filtersRow.querySelectorAll("select").forEach(s => {
-        const col = s.getAttribute("data-col-name");
-        active[col] = s.value; // empty string means "All"
-      });
-
-      Array.from(tbody.rows).forEach(tr => {
-        let visible = true;
-        for (const colName of columns) {
-          const wanted = active[colName];
-          if (!wanted) continue; // no filter for this column
-          const idx = colIndexByName[colName];
-          const td = tr.cells[idx];
-          const val = cellDisplayValue(td, colName);
-          if (val !== wanted) { visible = false; break; }
-        }
-        tr.style.display = visible ? "" : "none";
+  // Activa spinner en forms de preprocess/calc mientras se navega
+  (function () {
+    function armSpinnerHandlers(selector) {
+      document.querySelectorAll(selector).forEach(form => {
+        form.addEventListener('submit', (ev) => {
+          // botón que disparó el submit (si existe)
+          const btn = ev.submitter || form.querySelector('button[type="submit"]');
+          const spin = form.querySelector('.spinner');
+          if (btn) btn.classList.add('is-loading');
+          if (btn) btn.disabled = true;
+          if (spin) spin.style.display = 'inline-block';
+          // no prevenimos el submit: dejamos que navegue
+        });
       });
     }
+  })();
 
-    // --- Sync & Calc action handler (single action, rightmost column) ---
-    tbody.addEventListener("click", async (ev) => {
-      const btn = ev.target.closest(".sync-btn");
-      if (!btn) return;
-      btn.disabled = true;
-      const tr = btn.closest("tr");
-
-      // Build a JSON payload from row attributes
-      const payload = {
-        year: tr.getAttribute("data-year"),
-        election_type: tr.getAttribute("data-type"),
-        category: tr.getAttribute("data-category"),
-        office: tr.getAttribute("data-office"),
-        method: tr.getAttribute("data-method")
-      };
-
-      try {
-        // POST to backend endpoint (adjust path if needed)
-        const res = await fetch("/api/sync-calc", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload)
-        });
-        if (!res.ok) throw new Error("Request failed: " + res.status);
-        // Optional: give quick feedback
-        btn.textContent = "Queued ✓";
-      } catch (e) {
-        console.error(e);
-        alert("Sync & Calc failed. Check logs.");
-        btn.disabled = false;
-      }
-    });
-  });
 </script>
 {% endblock %}

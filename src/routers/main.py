@@ -39,6 +39,18 @@ def read_log(year: str, election_category: str, phase: str, office: str) -> str:
         return "(sin logs)"
     return p.read_text(encoding="utf-8", errors="replace")
 
+def excel_bytes_to_records(data: bytes) -> List[dict]:
+    """
+    Convierte la primera hoja del Excel a una lista de dicts (records).
+    - Normaliza columnas a str strip()
+    - Convierte NaN a None
+    """
+    df = pd.read_excel(io.BytesIO(data), dtype=object)
+    df.columns = [str(c).strip() for c in df.columns]
+    df = df.where(pd.notnull(df), None)
+    return df.to_dict(orient="records")
+
+
 def load_jsonl(path: Path) -> List[dict]:
     items: List[dict] = []
     if not path.exists():
@@ -331,14 +343,43 @@ async def rename_year(old_year: str = Form(...), new_year: str = Form(...)):
     save_db(db)
     return RedirectResponse("/elective_office/config", status_code=303)
 
+# Helper local para borrar sin romper si no existe
+def _safe_unlink(p: Path) -> None:
+    try:
+        if p.is_file():
+            p.unlink()
+    except Exception:
+        pass
+
 @router.post("/config/delete_year")
 async def delete_year(year: str = Form(...)):
+    year = (year or "").strip()
     db = load_db()
     if year not in db:
         raise HTTPException(404, "Año no existe")
+
+    # Recorrer categorías de ese año y borrar sus archivos seats_excel/seats_json
+    year_data = db.get(year) or {}
+    categories = (year_data.get("categories") or {})
+    for cat_data in categories.values():
+        if not cat_data:
+            continue
+        seats_excel_rel = cat_data.get("seats_excel")
+        seats_json_rel  = cat_data.get("seats_json")
+        if seats_excel_rel:
+            excel_path = (DATA_DIR / seats_excel_rel).resolve()
+            if DATA_DIR in excel_path.parents or excel_path == DATA_DIR:
+                _safe_unlink(excel_path)
+        if seats_json_rel:
+            json_path = (DATA_DIR / seats_json_rel).resolve()
+            if DATA_DIR in json_path.parents or json_path == DATA_DIR:
+                _safe_unlink(json_path)
+
+    # Finalmente borrar el año del DB
     del db[year]
     save_db(db)
     return RedirectResponse("/elective_office/config", status_code=303)
+
 
 @router.post("/config/attach_category")
 async def attach_category(
@@ -353,15 +394,32 @@ async def attach_category(
     if not seats_excel.filename.lower().endswith((".xlsx", ".xls")):
         raise HTTPException(400, "Adjunte un Excel (.xlsx/.xls)")
 
+    # 1) Persistir Excel original
     data = await seats_excel.read()
-    dest = FILES_DIR / f"{year}__{election_category}.xlsx"
-    dest.write_bytes(data)
+    excel_path = FILES_DIR / f"{year}__{election_category}.xlsx"
+    excel_path.write_bytes(data)
 
+    # 2) Transformar a JSON y guardar en preprocessed_data/
+    digest = sha256_of_bytes(data)
+    json_name = f"{year}__{election_category}__seats__{digest}.json"
+    json_path = PRE_DIR / json_name
+    try:
+        records = excel_bytes_to_records(data)   # <- usa el helper nuevo
+    except Exception as e:
+        raise HTTPException(400, f"Error leyendo Excel: {e}")
+
+    json_path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # 3) Actualizar db.json (conserva ruta del Excel y agrega seats_json)
     db = load_db()
     ensure_category(db, year, election_category)
-    db[year]["categories"][election_category]["seats_excel"] = str(dest.relative_to(DATA_DIR))
+    cat = db[year]["categories"][election_category]
+    cat["seats_excel"] = str(excel_path.relative_to(DATA_DIR))
+    cat["seats_json"]  = str(json_path.relative_to(DATA_DIR))  # NUEVO campo de referencia
     save_db(db)
+
     return RedirectResponse("/elective_office/config", status_code=303)
+
 
 @router.post("/config/create_phase")
 async def create_phase(
@@ -432,6 +490,22 @@ async def upsert_url(
     return RedirectResponse("/elective_office/config", status_code=303)
 
 # --------- Preprocess & Calc (adaptados a nuevo esquema) ----------
+# ===== Helpers stub para orquestación (por ahora solo prints) =====
+def do_preprocess(year: str, election_category: str, phase: str, office: str) -> dict:
+    """
+    Stub de preprocesamiento. Más adelante acá irá la lógica real.
+    """
+    print(f"[PREPROCESS] year={year} category={election_category} phase={phase} office={office}")
+    return {"ok": True, "stage": "preprocess", "year": year, "category": election_category, "phase": phase, "office": office}
+
+def do_calc(year: str, election_category: str, phase: str, office: str, method: str | None = None) -> dict:
+    """
+    Stub de cálculo. Más adelante acá irá la lógica real.
+    """
+    print(f"[CALC] year={year} category={election_category} phase={phase} office={office} method={method}")
+    return {"ok": True, "stage": "calc", "year": year, "category": election_category, "phase": phase, "office": office, "method": method}
+
+
 @router.post("/config/preprocess")
 async def preprocess(
     year: str = Form(...),
@@ -439,43 +513,15 @@ async def preprocess(
     phase: str = Form(...),
     office: str = Form(...),
 ):
-    db = load_db()
-    try:
-        entry = db[year]["categories"][election_category]["phases"][phase]["entries"][office]
-    except KeyError:
-        raise HTTPException(404, "Entrada no encontrada")
-    url = (entry.get("url") or "").strip()
-    if not url:
-        raise HTTPException(400, "URL no configurada para esta entrada")
-
-    log_append(year, election_category, phase, office, f"[PRE] Descargando CSV desde {url}")
-    digest, data = download_csv(url)
-    entry["base_sha256"] = digest
-
-    rows = parse_votes_from_csv(data)
-    filtered = [r for r in rows if (r.get("cargo_nombre") or "").lower().startswith(office.split()[0].lower())]
-    if not filtered:
-        log_append(year, election_category, phase, office, f"[PRE][WARN] No se filtró por cargo '{office}', se guardan todos los POSITIVO")
-        filtered = rows
-
-    pre_items = [{
-        "year": year,
-        "election_category": election_category,
-        "phase": phase,
-        "office": office,
-        "agrupacion_id": r["agrupacion_id"],
-        "agrupacion_nombre": r["agrupacion_nombre"],
-        "votos": r["votos"],
-    } for r in filtered]
-
-    out_name = f"{digest}__{year}__{election_category}__{phase}__{office.replace(' ', '_').lower()}.jsonl"
-    out_path = PRE_DIR / out_name
-    write_jsonl(out_path, pre_items)
-
-    entry["last_processed"] = _now_iso()
-    save_db(db)
-    log_append(year, election_category, phase, office, f"[PRE] Preprocesado -> preprocessed_data/{out_name} (filas={len(pre_items)})")
-    return RedirectResponse("/elective_office/config", status_code=303)
+    """
+    Ahora usa do_preprocess(...) (stub con print). 
+    Mantengo Redirect para volver al panel.
+    """
+    _ = do_preprocess(year, election_category, phase, office)
+    return RedirectResponse(
+        f"/elective_office/config?flt_year={year}&flt_category={election_category}&flt_phase={phase}",
+        status_code=303,
+    )
 
 @router.post("/config/calc")
 async def calc(
@@ -484,69 +530,51 @@ async def calc(
     phase: str = Form(...),
     office: str = Form(...),
 ):
-    db = load_db()
-    try:
-        entry = db[year]["categories"][election_category]["phases"][phase]["entries"][office]
-    except KeyError:
-        raise HTTPException(404, "Entrada no encontrada")
-    method_name = entry.get("method")
-    seats = entry.get("seats")
+    """
+    Ahora usa do_calc(...) (stub con print). 
+    Por ahora method se deja en None; se podrá inferir/validar luego.
+    """
+    _ = do_calc(year, election_category, phase, office, method=None)
 
-    # Para D'Hondt/Hare exigimos seats > 0 (se puede cargar manualmente o por importador Excel en otra iteración)
-    if method_name in ("d-hont", "hare") and (seats is None or int(seats) <= 0):
-        raise HTTPException(400, "Debe configurar 'seats' > 0 para calcular")
+    return RedirectResponse(
+        f"/elective_office/config?flt_year={year}&flt_category={election_category}&flt_phase={phase}",
+        status_code=303,
+    )
 
-    digest = entry.get("base_sha256")
-    if not digest:
-        raise HTTPException(400, "Falta preprocesar (no hay base_sha256)")
 
-    pattern = f"{digest}__{year}__{election_category}__{phase}__{office.replace(' ', '_').lower()}.jsonl"
-    pre_file = PRE_DIR / pattern
-    if not pre_file.exists():
-        raise HTTPException(400, f"Preprocesado inexistente: {pattern}")
+from fastapi import Body
+from fastapi.responses import JSONResponse
 
-    log_append(year, election_category, phase, office, f"[CALC] Método={method_name} seats={seats}")
+@router.post("/config/preprocess_and_calc")
+async def preprocess_and_calc(payload: dict = Body(...)):
+    """
+    Acepta JSON con:
+      {
+        "year": "2025",
+        "election_type": "PASO",     # -> phase
+        "category": "Nacional",      # -> election_category
+        "office": "diputados",
+        "method": "d-hont"           # opcional
+      }
+    Ejecuta do_preprocess(...) y luego do_calc(...). Por ahora solo prints.
+    """
+    year = str(payload.get("year", "")).strip()
+    phase = str(payload.get("election_type", "")).strip()          # mapea a 'phase'
+    election_category = str(payload.get("category", "")).strip()   # mapea a 'election_category'
+    office = str(payload.get("office", "")).strip()
+    method = payload.get("method")
 
-    items = load_jsonl(pre_file)
-    votes: Dict[str, int] = {}
-    for it in items:
-        pname = it.get("agrupacion_nombre") or it.get("agrupacion_id")
-        votes[pname] = votes.get(pname, 0) + int(it.get("votos") or 0)
+    if not (year and phase and election_category and office):
+        return JSONResponse({"ok": False, "error": "Parámetros requeridos: year, election_type, category, office"}, status_code=400)
 
-    total_valid = sum(votes.values())
-    log_append(year, election_category, phase, office, f"[CALC] Total votos POSITIVO = {total_valid}")
-    for p, v in sorted(votes.items(), key=lambda x: x[1], reverse=True):
-        log_append(year, election_category, phase, office, f"[CALC] {p}: {v} votos")
+    pre_res = do_preprocess(year, election_category, phase, office)
+    calc_res = do_calc(year, election_category, phase, office, method=method)
+    import time as t
+    t.sleep(1)
+    return JSONResponse({"ok": True, "preprocess": pre_res, "calc": calc_res})
 
-    if method_name == "d-hont":
-        result = calc_dhont(int(seats), votes)
-    elif method_name == "hare":
-        result = calc_hare(int(seats), votes)
-    elif method_name == "lista-incompleta":
-        result = calc_lista_incompleta(votes)
-    elif method_name == "mayoria-simple":
-        ordered = sorted(votes.items(), key=lambda x: x[1], reverse=True)
-        result = {ordered[0][0]: 1} if ordered else {}
-    else:
-        raise HTTPException(400, f"Método no soportado: {method_name}")
 
-    entry["result"] = result
-    entry["last_calc"] = _now_iso()
-    save_db(db)
-    log_append(year, election_category, phase, office, f"[CALC] Resultado = {json.dumps(result, ensure_ascii=False)}")
-    return RedirectResponse("/elective_office/config", status_code=303)
 
-# --------- Logs vista directa ----------
-@router.get("/config/logs")
-async def view_logs(
-    request: Request,
-    year: str = Query(...),
-    election_category: str = Query(...),
-    phase: str = Query(...),
-    office: str = Query(...),
-):
-    return await config_view(request, None, None, None, year, election_category, phase, office)
-#
 # Redirect raíz
 @app.get("/")
 async def root():
@@ -558,7 +586,7 @@ async def favicon():
     return RedirectResponse("/static/favicon.ico")
 
 
-# NUEVO: renombrar fase
+# Renombrar fase
 @router.post("/config/rename_phase")
 async def rename_phase(
     year: str = Form(...),
@@ -614,7 +642,16 @@ async def delete_phase(
     return RedirectResponse("/elective_office/config", status_code=303)
 
 
-# NUEVO: eliminar categoría completa
+# Helper local para borrar sin romper si no existe
+def _safe_unlink(p: Path) -> None:
+    try:
+        if p.is_file():
+            p.unlink()
+    except Exception:
+        # opcional: loggear si querés
+        pass
+
+# Eliminar categoría completa + sus archivos seats_excel/seats_json
 @router.post("/config/delete_category")
 async def delete_category(
     year: str = Form(...),
@@ -629,12 +666,30 @@ async def delete_category(
     except KeyError:
         raise HTTPException(404, "Año inexistente")
 
-    if election_category not in cats:
+    cat = cats.get(election_category)
+    if cat is None:
         raise HTTPException(404, "Categoría no existe en ese año")
 
+    # Borrar archivos asociados si están registrados (paths guardados relativos a DATA_DIR)
+    seats_excel_rel = (cat or {}).get("seats_excel")
+    seats_json_rel  = (cat or {}).get("seats_json")
+
+    if seats_excel_rel:
+        excel_path = (DATA_DIR / seats_excel_rel).resolve()
+        # Evitar escapes fuera de DATA_DIR
+        if DATA_DIR in excel_path.parents or excel_path == DATA_DIR:
+            _safe_unlink(excel_path)
+
+    if seats_json_rel:
+        json_path = (DATA_DIR / seats_json_rel).resolve()
+        if DATA_DIR in json_path.parents or json_path == DATA_DIR:
+            _safe_unlink(json_path)
+
+    # Finalmente, quitar la categoría del DB
     del cats[election_category]
     save_db(db)
     return RedirectResponse("/elective_office/config", status_code=303)
+
 
 # Registrar router (al final para incluir todas las rutas)
 app.include_router(router)
