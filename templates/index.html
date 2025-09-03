@@ -2,81 +2,135 @@
 {% block content %}
 <h2>Processed results</h2>
 
+<!-- ================== FILTER BAR (scrollable) ================== -->
+<div id="filters-bar">
+  <div class="filter-group">
+    <div class="filter-label">Year</div>
+    <div class="filter-scroll" id="filter-year">
+      <button class="chip chip-all" data-value="">All</button>
+      {% for y in years %}
+      <button class="chip" data-value="{{ y }}">{{ y }}</button>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="filter-group">
+    <div class="filter-label">Phase</div>
+    <div class="filter-scroll" id="filter-phase">
+      <button class="chip chip-all" data-value="">All</button>
+      {% for p in phases %}
+      <button class="chip" data-value="{{ p }}">{{ p }}</button>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- ================== TABLE ================== -->
 <table id="results-table">
   <thead>
     <tr>
-      <!-- Visible column headers (translated) -->
-      <th>Year</th>
-      <th>Type</th>
+      <!-- Year / Type removidos según pedido -->
       <th>Category</th>
       <th>Office</th>
       <th>Method</th>
       <th>Last Calc</th>
-      <th>Result</th>
+      <th>Calc</th>
       <th class="actions">Actions</th>
-    </tr>
-    <!-- Filters row: will be populated by JS with available options per column -->
-    <tr id="filters-row">
-      <!-- Each <th> will receive a <select> built from unique values in that column -->
-      <th data-filter-for="Year"></th>
-      <th data-filter-for="Type"></th>
-      <th data-filter-for="Category"></th>
-      <th data-filter-for="Office"></th>
-      <th data-filter-for="Method"></th>
-      <th data-filter-for="Last Calc"></th>
-      <th data-filter-for="Result"></th>
-      <th><!-- no filter for Actions --></th>
     </tr>
   </thead>
   <tbody>
     {% for row in rows %}
-    <tr data-year="{{ row.year }}" data-type="{{ row.election_type }}" data-category="{{ row.category }}"
-      data-office="{{ row.office }}" data-method="{{ row.method }}" data-lastcalc="{{ row.last_calc or '-' }}"
-      data-hasresult="{{ 'yes' if row.result else 'no' }}">
-      <td>{{ row.year }}</td>
-      <td>{{ row.election_type }}</td>
+    <tr class="data-row" data-year="{{ row.year }}" data-phase="{{ row.election_type }}"
+      data-category="{{ row.category }}" data-office="{{ row.office }}" data-method="{{ row.method }}"
+      data-pre="{{ row.preprocessed_json or '' }}">
       <td>{{ row.category }}</td>
-      <td>{{ row.office }}</td>
+      <td>
+        <button class="link-like show-calc" type="button" title="Show calc for this entry">
+          {{ row.office }}
+        </button>
+      </td>
       <td>{{ row.method }}</td>
       <td>{{ row.last_calc or '-' }}</td>
-      <td>
-        {% if row.result %}
-        <details>
-          <summary class="btn ok">View allocation</summary>
-          <pre class="mono">{{ row.result|tojson(indent=2) }}</pre>
-        </details>
-        {% else %}
-        -
-        {% endif %}
+      <td class="calc-cell">
+        <span class="calc-status">{{ 'ready' if row.preprocessed_json else '-' }}</span>
       </td>
       <td class="right">
-        <!-- Single action: Prep & Calc (rightmost). 
-             Uses data-* attributes from the row for payload. -->
-        <button class="btn primary sync-btn" type="button" data-year="{{ row.year }}"
-          data-type="{{ row.election_type }}" data-category="{{ row.category }}" data-office="{{ row.office }}"
-          data-method="{{ row.method }}" title="Synchronize sources and calculate results">
+        <button class="btn primary sync-btn" type="button" title="Preprocess & Calculate this entry">
           Prep &amp; Calc
         </button>
         <span class="spinner" aria-hidden="true" title="Processing"></span>
+      </td>
+    </tr>
+    <!-- Inline expandable row to show calc content -->
+    <tr class="calc-row" style="display:none">
+      <td colspan="6">
+        <div class="calc-panel">
+          <div class="calc-loading" hidden>Loading calc…</div>
+          <div class="calc-error" hidden></div>
+          <div class="calc-content" hidden></div>
+        </div>
       </td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
 
-<!-- Minimal styles; rely on existing .btn/.ok/.mono if defined in layout.css -->
 <style>
-    .spinner {
-    display: none;            /* visible solo mientras se envía */
-    width: 14px; height: 14px;
-    margin-left: 8px; vertical-align: middle;
-    border: 2px solid #bbb;   /* borde gris */
-    border-top-color: #fff;   /* “sector” blanco */
-    border-radius: 50%;
-    animation: spin 0.9s linear infinite;
+  /* --- Filter bar --- */
+  #filters-bar {
+    display: grid;
+    gap: 8px;
+    margin: 10px 0 16px;
   }
-  @keyframes spin { to { transform: rotate(360deg); } }
-  .btn.is-loading { opacity: .7; pointer-events: none; }
+
+  @media (min-width: 720px) {
+    #filters-bar {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+
+  .filter-group {
+    display: grid;
+    gap: 6px;
+  }
+
+  .filter-label {
+    font-weight: 600;
+    opacity: .9;
+  }
+
+  .filter-scroll {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 4px 2px;
+    scrollbar-width: thin;
+  }
+
+  .chip {
+    white-space: nowrap;
+    border: 1px solid #444;
+    background: #2f2f2f;
+    border-radius: 999px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: .92rem;
+  }
+
+  .chip:hover {
+    filter: brightness(1.1);
+  }
+
+  .chip.active {
+    border-color: #aaf;
+    box-shadow: 0 0 0 2px rgba(160, 160, 255, .15) inset;
+  }
+
+  .chip-all {
+    opacity: .85;
+  }
+
+  /* --- Table & buttons --- */
   #results-table {
     width: 100%;
     border-collapse: collapse;
@@ -85,21 +139,12 @@
   #results-table th,
   #results-table td {
     padding: 8px 10px;
-    border-bottom: 1px solid #ddd;
+    border-bottom: 1px solid #333;
     vertical-align: top;
   }
 
   #results-table thead th {
     text-align: left;
-  }
-
-  #results-table thead tr#filters-row th {
-    padding: 6px 10px;
-  }
-
-  #results-table select {
-    width: 100%;
-    max-width: 220px;
   }
 
   td.right,
@@ -121,9 +166,67 @@
     border-color: #aac;
   }
 
-  .btn:disabled {
-    opacity: 0.6;
-    cursor: not-allowed;
+  .btn.is-loading {
+    opacity: .7;
+    pointer-events: none;
+  }
+
+  .link-like {
+    background: none;
+    border: none;
+    color: #aaccff;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .link-like:hover {
+    text-decoration: underline;
+  }
+
+  .spinner {
+    display: none;
+    width: 14px;
+    height: 14px;
+    margin-left: 8px;
+    vertical-align: middle;
+    border: 2px solid #bbb;
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* --- Calc panel --- */
+  .calc-panel {
+    padding: 10px 8px;
+    background: #1f1f1f;
+    border: 1px solid #333;
+    border-radius: 8px;
+  }
+
+  .calc-panel table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+  }
+
+  .calc-panel th,
+  .calc-panel td {
+    border-bottom: 1px solid #2e2e2e;
+    padding: 6px 8px;
+  }
+
+  .calc-loading {
+    opacity: .85;
+  }
+
+  .calc-error {
+    color: #ff9b9b;
   }
 
   .mono {
@@ -132,81 +235,174 @@
 </style>
 
 <script>
-  // --- Helper: extract a normalized display value for a cell (used in filtering) ---
-  function cellDisplayValue(td, colName) {
-    // For "Result" we consider "With result" vs "-"
-    if (colName === "Result") {
-      const hasDetails = td.querySelector("details") !== null;
-      return hasDetails ? "With result" : "-";
-    }
-    const text = (td.textContent || "").trim();
-    return text === "" ? "-" : text;
+  // Utilities
+  function setActiveChip(groupEl, value) {
+    groupEl.querySelectorAll('.chip').forEach(ch => {
+      ch.classList.toggle('active', ch.dataset.value === value);
+      if (value === '' && ch.classList.contains('chip-all')) ch.classList.add('active');
+      else if (ch.classList.contains('chip-all')) ch.classList.toggle('active', value === '');
+    });
+  }
+  function applyFilters() {
+    const y = document.querySelector('#filter-year .chip.active')?.dataset.value || '';
+    const p = document.querySelector('#filter-phase .chip.active')?.dataset.value || '';
+    document.querySelectorAll('#results-table tbody tr.data-row').forEach((tr) => {
+      const okY = !y || tr.dataset.year === y;
+      const okP = !p || tr.dataset.phase === p;
+      const show = (okY && okP);
+      tr.style.display = show ? '' : 'none';
+      const calcRow = tr.nextElementSibling;
+      if (calcRow && calcRow.classList.contains('calc-row')) {
+        calcRow.style.display = show && calcRow.dataset.open === '1' ? '' : 'none';
+      }
+    });
   }
 
-  // --- Build filter selects using unique values found in each column ---
-    document.addEventListener("DOMContentLoaded", () => {
-      const table = document.getElementById("results-table");
-      const tbody = table.querySelector("tbody");
+  document.addEventListener('DOMContentLoaded', () => {
+    // Default select "All"
+    setActiveChip(document.getElementById('filter-year'), '');
+    setActiveChip(document.getElementById('filter-phase'), '');
+    applyFilters();
 
-      // --- Prep & Calc action handler (FIX: URL y finally) ---
-      tbody.addEventListener("click", async (ev) => {
-        const btn = ev.target.closest(".sync-btn");
-        if (!btn) return;
-        const tr = btn.closest("tr");
-        const spin = tr.querySelector(".spinner");
-
-        // UI: loading on
-        btn.classList.add("is-loading");
-        btn.disabled = true;
-        if (spin) spin.style.display = "inline-block";
-
-        // payload desde atributos data-*
-        const payload = {
-          year: tr.getAttribute("data-year"),
-          election_type: tr.getAttribute("data-type"),
-          category: tr.getAttribute("data-category"),
-          office: tr.getAttribute("data-office"),
-          method: tr.getAttribute("data-method")
-        };
-
-        try {
-          // FIX: URL correcta (sin /config)
-          const res = await fetch("/elective_office/config/preprocess_and_calc", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-          });
-          if (!res.ok) throw new Error("Request failed: " + res.status);
-
-          btn.textContent = "Queued ✓";
-        } catch (e) {
-          console.error(e);
-          alert("Prep & Calc failed. Check logs.");
-        } finally {
-          // UI: loading off (siempre)
-          if (spin) spin.style.display = "none";
-          btn.classList.remove("is-loading");
-          btn.disabled = false; // si preferís dejarlo deshabilitado, quitá esta línea
-        }
-      });
+    // Click handlers for filters
+    document.getElementById('filter-year').addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.chip'); if (!btn) return;
+      setActiveChip(ev.currentTarget, btn.dataset.value || '');
+      applyFilters();
+    });
+    document.getElementById('filter-phase').addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.chip'); if (!btn) return;
+      setActiveChip(ev.currentTarget, btn.dataset.value || '');
+      applyFilters();
     });
 
-  // Activa spinner en forms de preprocess/calc mientras se navega
-  (function () {
-    function armSpinnerHandlers(selector) {
-      document.querySelectorAll(selector).forEach(form => {
-        form.addEventListener('submit', (ev) => {
-          // botón que disparó el submit (si existe)
-          const btn = ev.submitter || form.querySelector('button[type="submit"]');
-          const spin = form.querySelector('.spinner');
-          if (btn) btn.classList.add('is-loading');
-          if (btn) btn.disabled = true;
-          if (spin) spin.style.display = 'inline-block';
-          // no prevenimos el submit: dejamos que navegue
-        });
-      });
-    }
-  })();
+    // Prep & Calc action
+    document.querySelector('#results-table tbody').addEventListener('click', async (ev) => {
+      const btn = ev.target.closest('.sync-btn');
+      if (!btn) return;
 
+      const tr = btn.closest('tr.data-row');
+      const spin = tr.querySelector('.spinner');
+      btn.classList.add('is-loading'); btn.disabled = true; if (spin) spin.style.display = 'inline-block';
+
+      const payload = {
+        year: tr.dataset.year,
+        election_type: tr.dataset.phase,
+        category: tr.dataset.category,
+        office: tr.dataset.office,
+        method: tr.dataset.method
+      };
+
+      try {
+        const res = await fetch("/elective_office/config/preprocess_and_calc", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error("Request failed: " + res.status);
+        // Mark as ready for calc
+        tr.dataset.pre = 'updated';
+        tr.querySelector('.calc-status').textContent = 'ready';
+        btn.textContent = "Queued ✓";
+      } catch (e) {
+        console.error(e);
+        alert("Prep & Calc failed. Check logs.");
+      } finally {
+        if (spin) spin.style.display = 'none';
+        btn.classList.remove('is-loading');
+        btn.disabled = false;
+      }
+    });
+
+    // Show calc per row (expand/collapse)
+    document.querySelector('#results-table tbody').addEventListener('click', async (ev) => {
+      const link = ev.target.closest('.show-calc');
+      if (!link) return;
+
+      const tr = link.closest('tr.data-row');
+      const next = tr.nextElementSibling;
+      if (!next || !next.classList.contains('calc-row')) return;
+
+      const panel = next.querySelector('.calc-panel');
+      const loading = panel.querySelector('.calc-loading');
+      const errorBox = panel.querySelector('.calc-error');
+      const content = panel.querySelector('.calc-content');
+
+      // Toggle
+      const willOpen = next.style.display === 'none';
+      next.style.display = willOpen ? '' : 'none';
+      next.dataset.open = willOpen ? '1' : '0';
+      if (!willOpen) return;
+
+      // Fetch calc from API
+      loading.hidden = false; errorBox.hidden = true; errorBox.textContent = '';
+      content.hidden = true; content.innerHTML = '';
+
+      try {
+        const params = new URLSearchParams({
+          year: tr.dataset.year,
+          election_category: tr.dataset.category,
+          phase: tr.dataset.phase,
+          office: tr.dataset.office
+        });
+        const res = await fetch(`/elective_office/api/calc?${params.toString()}`);
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+
+        // Render calc
+        const c = data?.calc?.all || null;
+        if (!c) {
+          content.innerHTML = '<div>No calc data found.</div>';
+        } else {
+          const pos = c.positive || {};
+          const other = Object.assign({}, c);
+          delete other.positive;
+
+          const gid2name = (data && data.groups) ? data.groups : {};
+          const posRows = Object.keys(pos)
+              .sort((a, b) => (a === 'all') ? 1 : (b === 'all') ? -1 : a.localeCompare(b))
+              .map(k => {
+                  const name = (k === 'all') ? '' : (gid2name[k] || 'undefined');
+                  return `<tr>
+                        <td class="mono">${k}</td>
+                        <td>${name}</td>
+                        <td class="mono" style="text-align:right">${pos[k].toLocaleString('en-US')}</td>
+                      </tr>`;
+                }).join('');
+
+          let otherRows = '';
+          for (const k of Object.keys(other)) {
+            otherRows += `<tr><td>${k}</td><td class="mono" style="text-align:right">${(other[k] ?? 0).toLocaleString('en-US')}</td></tr>`;
+          }
+
+          content.innerHTML = `
+            <div><strong>Calc → all</strong></div>
+            <div style="display:grid; gap:10px; grid-template-columns: repeat(auto-fit,minmax(220px,1fr)); margin-top:6px;">
+              <div>
+                <div><em>Positive (by group_id)</em></div>
+                <table>
+                  <thead><tr><th>group_id</th><th>group_name</th><th>votes</th></tr></thead>
+                  <tbody>${posRows}</tbody>
+                </table>
+              </div>
+              <div>
+                <div><em>Other totals</em></div>
+                <table>
+                  <thead><tr><th>type</th><th>votes</th></tr></thead>
+                  <tbody>${otherRows}</tbody>
+                </table>
+              </div>
+            </div>`;
+        }
+        content.hidden = false;
+      } catch (err) {
+        console.error(err);
+        errorBox.textContent = 'Failed to load calc.';
+        errorBox.hidden = false;
+      } finally {
+        loading.hidden = true;
+      }
+    });
+  });
 </script>
 {% endblock %}

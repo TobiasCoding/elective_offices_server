@@ -216,27 +216,110 @@ def write_jsonl(path: Path, items: List[dict]) -> None:
 @router.get("/")
 async def home(request: Request):
     db = load_db()
-    # Salida resumida para usuario final (index)
     rows = []
-    for year, ydata in db.items():
+    years_set = set()
+    phases_set = set()
+
+    for year, ydata in (db or {}).items():
+        years_set.add(year)
         cats = (ydata.get("categories") or {})
         for cat, cdata in cats.items():
             phases = (cdata.get("phases") or {})
             for ph, pdata in phases.items():
+                phases_set.add(ph)
                 for office, meta in (pdata.get("entries") or {}).items():
                     rows.append({
                         "year": year,
-                        "election_type": ph,
+                        "election_type": ph,               # phase
                         "category": cat,
                         "office": office,
-                        "method": meta.get("method"),
-                        "url": meta.get("url"),
-                        "base_sha256": meta.get("base_sha256"),
-                        "last_calc": meta.get("last_calc"),
-                        "result": meta.get("result"),
+                        "method": (meta or {}).get("method"),
+                        "url": (meta or {}).get("url"),
+                        "base_sha256": (meta or {}).get("base_sha256"),
+                        "last_calc": (meta or {}).get("last_calc"),
+                        "result": (meta or {}).get("result"),
+                        "preprocessed_json": (meta or {}).get("preprocessed_json"),
                     })
+
     rows.sort(key=lambda r: (r["year"], r["category"], r["election_type"], r["office"]))
-    return templates.TemplateResponse("index.html", {"request": request, "title": "Inicio", "rows": rows, "now": _now_iso()})
+    years = sorted(years_set)
+    phases = sorted(phases_set)
+
+    return templates.TemplateResponse(
+        "index.html",
+        {
+            "request": request,
+            "title": "Inicio",
+            "rows": rows,
+            "years": years,
+            "phases": phases,
+            "now": _now_iso(),
+        },
+    )
+
+# AGREGAR (debajo de otras rutas /elective_office)
+@router.get("/api/calc")
+async def api_get_calc(
+    year: str,
+    election_category: str,
+    phase: str,
+    office: str,
+):
+    """
+    Devuelve {"calc": ...} leyendo el archivo preprocessed_json registrado
+    en db.json para esa entrada (si existe); si no hay, devuelve 404 o calc vacío.
+    """
+    db = load_db()
+    try:
+        meta = db[year]["categories"][election_category]["phases"][phase]["entries"][office]
+    except KeyError:
+        raise HTTPException(404, "Entrada no encontrada en db.json")
+
+    pre_rel = (meta or {}).get("preprocessed_json")
+    if not pre_rel:
+        raise HTTPException(404, "No hay preprocessed_json aún para esta entrada")
+
+    pre_path = (DATA_DIR / pre_rel).resolve()
+    if not pre_path.exists():
+        raise HTTPException(404, f"Archivo preprocesado no encontrado: {pre_path}")
+
+    try:
+        payload = json.loads(pre_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        raise HTTPException(500, f"Error leyendo preprocessed_json: {e}")
+
+    # Si no tiene 'calc', devolvemos calc vacío coherente
+    calc = payload.get("calc")
+
+    # === NUEVO: cargar mapa group_id -> group_name desde groups_jsonl ===
+    groups_map: dict[str, str] = {}
+    try:
+        # groups_jsonl se define al nivel de la categoría en db.json
+        groups_rel = (db[year]["categories"][election_category] or {}).get("groups_jsonl")
+        if groups_rel:
+            groups_path = (DATA_DIR / groups_rel).resolve()
+            if groups_path.exists():
+                # Soportamos dos formatos de línea:
+                # - {"group_id": "20132", "group_name": "JUNTOS POR EL CAMBIO"}
+                # - {"20132": "JUNTOS POR EL CAMBIO"}
+                for it in load_jsonl(groups_path):
+                    if isinstance(it, dict):
+                        if "group_id" in it and "group_name" in it:
+                            gid = str(it.get("group_id") or "").strip()
+                            gnm = str(it.get("group_name") or "").strip()
+                            if gid:
+                                groups_map[gid] = gnm
+                        elif len(it) == 1:
+                            k, v = next(iter(it.items()))
+                            gid = str(k).strip()
+                            gnm = str(v or "").strip()
+                            if gid:
+                                groups_map[gid] = gnm
+    except Exception:
+        # Si falla, seguimos devolviendo calc sin nombres (fallback silencioso)
+        groups_map = {}
+
+    return JSONResponse({"calc": calc, "groups": groups_map})
 
 @router.get("/config")
 async def config_view(
@@ -489,22 +572,378 @@ async def upsert_url(
     save_db(db)
     return RedirectResponse("/elective_office/config", status_code=303)
 
-# --------- Preprocess & Calc (adaptados a nuevo esquema) ----------
+# --------- Parse, preprocess & Calc (adaptados a nuevo esquema) ----------
 # ===== Helpers stub para orquestación (por ahora solo prints) =====
+def do_parse(year: str, election_category: str, phase: str, office: str) -> bool:
+    """
+    Descarga y valida el archivo CSV asociado a la entrada indicada.
+    - Guarda el CSV en files/<sha256>.csv
+    - Actualiza db.json con la ruta relativa y el sha256
+    - Devuelve True si se parseó correctamente
+    """
+    print(f"[PARSE] year={year} category={election_category} phase={phase} office={office}")
+    db = load_db()
+    try:
+        meta = db[year]["categories"][election_category]["phases"][phase]["entries"][office]
+        print(f"Entrada encontrada: {meta}")
+    except KeyError:
+        print(f"Entrada no encontrada en db.json")
+        raise HTTPException(404, "Entrada no encontrada en db.json")
+
+    url = meta.get("url")
+    if not url:
+        print(f"No hay URL registrada para esta entrada")
+        raise HTTPException(400, "No hay URL registrada para esta entrada")
+
+    # 1) Descargar archivo
+    print(f"Descargando archivo: {url}")
+    digest, data = download_csv(url)
+
+    # 2) Guardar archivo en files/
+    print(f"Guardando archivo en files/{digest}.csv")
+    csv_path = FILES_DIR / f"{digest}.csv"
+    csv_path.write_bytes(data)
+    print(f"Archivo guardado en files/{digest}.csv")
+
+    # 3) Intentar parsear (si falla, se lanza HTTPException)
+    print(f"Intentando parsear archivo")
+    _ = parse_votes_from_csv(data)
+    print(f"Parseo exitoso")
+
+    # 4) Actualizar db.json con info del archivo
+    print(f"Actualizando db.json")
+    meta["base_sha256"] = digest
+    meta["last_processed"] = _now_iso()
+    meta["file_path"] = str(csv_path.relative_to(DATA_DIR))
+    print(f"Guardando db.json: {meta}")
+    save_db(db)
+    print(f"Parseo exitoso")
+    return True
+
+
 def do_preprocess(year: str, election_category: str, phase: str, office: str) -> dict:
     """
-    Stub de preprocesamiento. Más adelante acá irá la lógica real.
+    Lee el CSV referenciado en db.json (base_sha256 / file_path) y genera un JSON normalizado en:
+    preprocessed_data/<year>__<category>__<phase>__<office>__<sha256>.json
+
+    Cambios requeridos:
+    - En 'rows' guarda sólo 'group_id' (NO 'group_name').
+    - Mapea 'vote_type' a código numérico según especificación.
+    - Copia campos: seccionprovincial_id, seccion_id, circuito_id, mesa_id, mesa_electores.
+    - Usa/crea mapeo de grupos en preprocessed_data/groups_{año}_{nacional|provincial}.jsonl.
+      * La ruta relativa se guarda en db.json al mismo nivel que 'seats_excel' bajo la categoría.
+      * Si aparecen nuevos group_id -> se agregan (group_id como clave, group_name como valor) y
+        se reescribe el jsonl al finalizar.
     """
     print(f"[PREPROCESS] year={year} category={election_category} phase={phase} office={office}")
-    return {"ok": True, "stage": "preprocess", "year": year, "category": election_category, "phase": phase, "office": office}
+
+    # --- 1) Resolver metadata desde db.json ---
+    db = load_db()
+    try:
+        meta = db[year]["categories"][election_category]["phases"][phase]["entries"][office]
+    except KeyError:
+        raise HTTPException(404, "Entrada no encontrada en db.json")
+
+    digest = (meta or {}).get("base_sha256")
+    rel_csv = (meta or {}).get("file_path")
+    if not digest or not rel_csv:
+        raise HTTPException(400, "Falta realizar el parseo previo (base_sha256/file_path ausentes)")
+
+    csv_path = (DATA_DIR / rel_csv).resolve()
+    if not csv_path.exists():
+        raise HTTPException(400, f"CSV base no encontrado: {csv_path}")
+
+    # --- 2) Preparar ruta de groups_jsonl por año+tipo (nacional/provincial) ---
+    # Normalizamos categoría para decidir 'nacional' o 'provincial'
+    cat_lc = (election_category or "").strip().lower()
+    if "nac" in cat_lc:
+        cat_slug = "nacional"
+    elif "prov" in cat_lc:
+        cat_slug = "provincial"
+    else:
+        # fallback conservador
+        cat_slug = cat_lc.replace(" ", "_") or "categoria"
+
+    groups_fname = f"groups_{year}_{cat_slug}.jsonl"
+    groups_path = (PRE_DIR / groups_fname).resolve()  # absoluto
+    groups_rel = str(Path("preprocessed_data") / groups_fname)  # relativo a DATA_DIR
+
+    # Garantizar que la ruta quede guardada en db.json a nivel de la categoría
+    cat_node = db.setdefault(year, {}).setdefault("categories", {}).setdefault(election_category, {})
+    if cat_node.get("groups_jsonl") != groups_rel:
+        cat_node["groups_jsonl"] = groups_rel
+        save_db(db)
+
+    # --- 3) Cargar mapeo de grupos existente desde el jsonl específico ---
+    groups_map: dict[str, str] = {}
+    if groups_path.exists():
+        try:
+            # Soportamos líneas en dos formatos:
+            # - {"group_id": "20132", "group_name": "JUNTOS POR EL CAMBIO"}
+            # - {"20132": "JUNTOS POR EL CAMBIO"}  (clave única por línea)
+            items = load_jsonl(groups_path)
+            for it in items:
+                if isinstance(it, dict):
+                    if "group_id" in it and "group_name" in it:
+                        gid = str(it.get("group_id") or "").strip()
+                        gnm = str(it.get("group_name") or "").strip()
+                        if gid:
+                            groups_map[gid] = gnm
+                    elif len(it) == 1:
+                        k, v = next(iter(it.items()))
+                        gid = str(k).strip()
+                        gnm = str(v or "").strip()
+                        if gid:
+                            groups_map[gid] = gnm
+        except Exception:
+            # No abortamos el preprocesado si el jsonl está corrupto; seguimos con vacío.
+            groups_map = {}
+
+    # --- 4) Leer CSV y normalizar filas ---
+    data = csv_path.read_bytes()
+    txt = data.decode("utf-8", errors="replace")
+    reader = csv.DictReader(io.StringIO(txt))
+
+    required = {"votos_tipo", "votos_cantidad", "agrupacion_id", "agrupacion_nombre"}
+    missing = required - set([c.strip() for c in (reader.fieldnames or [])])
+    if missing:
+        raise HTTPException(400, f"CSV inválido: faltan columnas {sorted(missing)}")
+
+    # Columnas adicionales a copiar tal cual
+    extra_cols = ["seccionprovincial_id", "seccion_id", "circuito_id", "mesa_id", "mesa_electores"]
+
+    # Mapeo de tipos de voto -> código (None si vacío o no reconocido)
+    def map_vote_type(raw: str | None) -> int | None:
+        if not raw:
+            return None
+        t = str(raw).strip().upper()
+        if t in ("", "UNDEFINED", "NULL", "NONE"):
+            return None
+        # Especificación conocida:
+        # 0 POSITIVO, 1 IMPUGNADO, 2 RECURRIDO, 3 COMANDO, (4 también figuraba como POSITIVO en una variante)
+        # Opcionalmente contemplamos EN BLANCO (5) y NULO (6) si existiesen en la fuente.
+        if t == "POSITIVO":
+            return 0
+        if t == "IMPUGNADO":
+            return 1
+        if t == "RECURRIDO":
+            return 2
+        if t == "COMANDO":
+            return 3
+        if t == "EN BLANCO":
+            return 5
+        if t == "NULO":
+            return 6
+        return None
+
+    rows: list[dict] = []
+    pending_groups: dict[str, str] = {}  # nuevos group_id->group_name detectados
+
+    for raw_row in reader:
+        try:
+            # Código de tipo de voto
+            vt_code = map_vote_type(raw_row.get("votos_tipo"))
+
+            # Cantidad de votos (entero no negativo)
+            try:
+                vn = int(float(raw_row.get("votos_cantidad") or 0))
+            except Exception:
+                vn = 0
+            vn = max(0, vn)
+
+            # Normalización de group_id y registro del nombre
+            gid_raw = raw_row.get("agrupacion_id")
+            gid = str(gid_raw if gid_raw is not None else "").strip()
+            # Si viene 'undefined'/vacío, se establece a "0" (pedido previo)
+            if gid.lower() in ("", "undefined", "null", "none"):
+                gid = "0"
+
+            gnm = str(raw_row.get("agrupacion_nombre") or "").strip()
+
+            # Registrar nuevos grupos para persistir (si tenemos nombre)
+            if gid and gnm and (gid not in groups_map) and (gid not in pending_groups):
+                pending_groups[gid] = gnm
+
+            # Construir fila final SOLO con group_id + extras
+            out_row = {
+                "vote_type": vt_code,
+                "vote_number": vn,
+                "group_id": gid,  # solo id
+            }
+            for col in extra_cols:
+                val = raw_row.get(col)
+                if val is None:
+                    out_row[col] = None
+                else:
+                    sval = str(val).strip()
+                    out_row[col] = sval if sval != "" else None
+
+            rows.append(out_row)
+        except Exception:
+            # fila corrupta: continuar
+            continue
+
+    if not rows:
+        raise HTTPException(400, "CSV sin filas válidas para preprocesar")
+
+    # --- 5) Persistir JSON preprocesado ---
+    out_name = f"{year}__{election_category}__{phase}__{office}__{digest}.json"
+    out_path = PRE_DIR / out_name
+    payload = {
+        "year": year,
+        "category": election_category,
+        "phase": phase,
+        "office": office,
+        "source": {"sha256": digest, "csv_path": str(csv_path.relative_to(DATA_DIR))},
+        "rows": rows,
+    }
+    out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # --- 6) Actualizar db.json con referencia al preprocesado (y groups_jsonl ya seteado) ---
+    meta["preprocessed_json"] = str(out_path.relative_to(DATA_DIR))
+    meta["last_preprocess"] = _now_iso()
+    # 'groups_jsonl' ya quedó en cat_node al inicio; persistimos todo:
+    save_db(db)
+
+    # --- 7) Actualizar/crear preprocessed_data/groups_{año}_{tipo}.jsonl con nuevos group_id detectados ---
+    if pending_groups:
+        # Mezclar con los existentes
+        groups_map.update(pending_groups)
+
+        # Formato de salida: {group_id: group_name} por línea
+        lines: list[dict] = [{gid: groups_map[gid]} for gid in sorted(groups_map.keys(), key=lambda x: (len(x), x))]
+
+        # Asegurar directorio
+        groups_path.parent.mkdir(parents=True, exist_ok=True)
+        write_jsonl(groups_path, lines)
+
+    log_append(year, election_category, phase, office, f"Preprocess OK -> {out_path.name} ({len(rows)} filas)")
+    return {
+        "ok": True,
+        "stage": "preprocess",
+        "output": str(out_path.relative_to(DATA_DIR)),
+        "rows": len(rows),
+        "new_groups": len(pending_groups),
+        "groups_jsonl": groups_rel,
+    }
+
+
+
 
 def do_calc(year: str, election_category: str, phase: str, office: str, method: str | None = None) -> dict:
     """
-    Stub de cálculo. Más adelante acá irá la lógica real.
+    Calcula:
+      - POSITIVO (vote_type=0): suma por group_id
+      - Resto (impugnado/recurrido/comando/en_blanco/nulo): totales globales (sin desglosar por grupo)
+    Inserta el bloque: "calc": { "all": { "positive": {...}, "impugnado": N, "recurrido": N, ... } }
+    sobre el JSON preprocesado.
     """
     print(f"[CALC] year={year} category={election_category} phase={phase} office={office} method={method}")
-    return {"ok": True, "stage": "calc", "year": year, "category": election_category, "phase": phase, "office": office, "method": method}
 
+    db = load_db()
+    try:
+        meta = db[year]["categories"][election_category]["phases"][phase]["entries"][office]
+        print("Meta. Done")
+    except KeyError:
+        print("Meta. KeyError")
+        raise HTTPException(404, "Entrada no encontrada en db.json")
+
+    pre_rel = (meta or {}).get("preprocessed_json")
+    if not pre_rel:
+        print("Preprocessed. KeyError")
+        raise HTTPException(400, "Falta preprocesado (no existe preprocessed_json en db.json)")
+
+    pre_path = (DATA_DIR / pre_rel).resolve()
+    if not pre_path.exists():
+        print("Preprocessed. KeyError")
+        raise HTTPException(400, f"Archivo preprocesado no encontrado: {pre_path}")
+
+    # Cargar preprocesado existente
+    payload = json.loads(pre_path.read_text(encoding="utf-8"))
+    rows = payload.get("rows", [])
+    print("Rows. Done")
+
+    # --- Acumuladores ---
+    positive_by_group: dict[str, int] = {}
+
+    # mapeo nombres legibles para tipos no-positivo
+    type_names = {
+        1: "impugnado",
+        2: "recurrido",
+        3: "comando",
+        5: "en_blanco",
+        6: "nulo",
+    }
+    others_totals = {name: 0 for name in type_names.values()}
+
+    # --- Recorrer filas ---
+    for r in rows:
+        vt = r.get("vote_type")
+        vn = int(r.get("vote_number") or 0)
+
+        if vt == 0:  # POSITIVO -> por grupo
+            gid = str(r.get("group_id") or "null")
+            positive_by_group[gid] = positive_by_group.get(gid, 0) + vn
+        else:
+            # Solo sumar los tipos mapeados; ignorar otros códigos/desconocidos
+            name = type_names.get(vt)
+            if name:
+                others_totals[name] += vn
+
+    # --- Construir bloque calc.all ---
+    total_positive = sum(positive_by_group.values())
+    positive_block = positive_by_group | {"all": total_positive}
+
+    # Sumar todos los votos: positivos + otros tipos
+    total_all = total_positive + sum(others_totals.values())
+
+    all_block = {"positive": positive_block} | others_totals
+    all_block["all"] = total_all
+
+    payload["calc"] = {"all": all_block}
+
+    # Sobrescribir archivo preprocesado
+    pre_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    # Actualizar db.json con marca de último cálculo
+    meta["last_calc"] = _now_iso()
+    save_db(db)
+
+    log_append(
+        year, election_category, phase, office,
+        f"Calc OK -> {pre_path.name} (rows={len(rows)}, groups={len(positive_by_group)})"
+    )
+    print("Calc. Done")
+
+    return {
+        "ok": True,
+        "stage": "calc",
+        "year": year,
+        "category": election_category,
+        "phase": phase,
+        "office": office,
+        "method": method,
+        "groups": len(positive_by_group),
+        "totals": others_totals,
+    }
+
+
+@router.post("/config/parse")
+async def parse(
+    year: str = Form(...),
+    election_category: str = Form(...),
+    phase: str = Form(...),
+    office: str = Form(...),
+):
+    """
+    Preprocesamiento: primero parsea el CSV, luego continúa con el stub.
+    """
+    if not do_parse(year, election_category, phase, office):
+        raise HTTPException(400, "Parseo fallido")
+    return RedirectResponse(
+        f"/elective_office/config?flt_year={year}&flt_category={election_category}&flt_phase={phase}",
+        status_code=303,
+    )
 
 @router.post("/config/preprocess")
 async def preprocess(

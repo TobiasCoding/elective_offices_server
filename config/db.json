@@ -19,10 +19,13 @@
                 "method": "d-hont",
                 "url": "http://resultados.mininterior.gob.ar/api/resultado/totalizadocsv?a%C3%B1o=2023&recuento=Provisorio&idEleccion=2&idCargo=3&idDistrito=2",
                 "seats": null,
-                "base_sha256": null,
-                "last_processed": null,
-                "last_calc": null,
-                "result": null
+                "base_sha256": "a17e656e31f23e3db8abed2a8ccd6392a19787073adeb3f41de31b0c311ae68d",
+                "last_processed": "2025-09-03T16:32:40Z",
+                "last_calc": "2025-09-03T19:55:15Z",
+                "result": null,
+                "file_path": "files/a17e656e31f23e3db8abed2a8ccd6392a19787073adeb3f41de31b0c311ae68d.csv",
+                "preprocessed_json": "preprocessed_data/2025__Nacional__PASO__diputados__a17e656e31f23e3db8abed2a8ccd6392a19787073adeb3f41de31b0c311ae68d.json",
+                "last_preprocess": "2025-09-03T19:45:02Z"
               },
               "senadores": {
                 "method": "lista-incompleta",
@@ -54,7 +57,130 @@
             }
           }
         },
-        "seats_json": "preprocessed_data/2025__Nacional__seats__a3e60948044b108201e3eb116a8fb21223e26e490a1a80cf25f8a4d76f93b887.json"
+        "seats_json": "preprocessed_data/2025__Nacional__seats__a3e60948044b108201e3eb116a8fb21223e26e490a1a80cf25f8a4d76f93b887.json",
+        "groups_jsonl": "preprocessed_data/groups_2025_nacional.jsonl"
+      },
+      "Provincial": {
+        "seats_excel": "files/2025__Provincial.xlsx",
+        "phases": {
+          "PASO": {
+            "entries": {
+              "gobernador y vicegobernador": {
+                "method": "mayoria-simple",
+                "url": null,
+                "seats": null,
+                "base_sha256": null,
+                "last_processed": null,
+                "last_calc": null,
+                "result": null
+              },
+              "diputados": {
+                "method": "d-hont",
+                "url": null,
+                "seats": null,
+                "base_sha256": null,
+                "last_processed": null,
+                "last_calc": null,
+                "result": null
+              },
+              "senadores": {
+                "method": "d-hont",
+                "url": null,
+                "seats": null,
+                "base_sha256": null,
+                "last_processed": null,
+                "last_calc": null,
+                "result": null
+              },
+              "intendente": {
+                "method": "mayoria-simple",
+                "url": null,
+                "seats": null,
+                "base_sha256": null,
+                "last_processed": null,
+                "last_calc": null,
+                "result": null
+              },
+              "concejales": {
+                "method": "hare",
+                "url": null,
+                "seats": null,
+                "base_sha256": null,
+                "last_processed": null,
+                "last_calc": null,
+                "result": null
+              },
+              "consejeros escolares": {
+                "method": "hare",
+                "url": null,
+                "seats": null,
+                "base_sha256": null,
+                "last_processed": null,
+                "last_calc": null,
+                "result": null
+              }
+            }
+          },
+          "GENERAL": {
+            "entries": {
+              "gobernador y vicegobernador": {
+                "method": "mayoria-simple",
+                "url": null,
+                "seats": null,
+                "base_sha256": null,
+                "last_processed": null,
+                "last_calc": null,
+                "result": null
+              },
+              "diputados": {
+                "method": "d-hont",
+                "url": null,
+                "seats": null,
+                "base_sha256": null,
+                "last_processed": null,
+                "last_calc": null,
+                "result": null
+              },
+              "senadores": {
+                "method": "d-hont",
+                "url": null,
+                "seats": null,
+                "base_sha256": null,
+                "last_processed": null,
+                "last_calc": null,
+                "result": null
+              },
+              "intendente": {
+                "method": "mayoria-simple",
+                "url": null,
+                "seats": null,
+                "base_sha256": null,
+                "last_processed": null,
+                "last_calc": null,
+                "result": null
+              },
+              "concejales": {
+                "method": "hare",
+                "url": null,
+                "seats": null,
+                "base_sha256": null,
+                "last_processed": null,
+                "last_calc": null,
+                "result": null
+              },
+              "consejeros escolares": {
+                "method": "hare",
+                "url": null,
+                "seats": null,
+                "base_sha256": null,
+                "last_processed": null,
+                "last_calc": null,
+                "result": null
+              }
+            }
+          }
+        },
+        "seats_json": "preprocessed_data/2025__Provincial__seats__f487bc1e46fe1c1439e5e0414e15fe883f644e24baca9e4c284ddb6e42c9cb0d.json"
       }
     }
   }

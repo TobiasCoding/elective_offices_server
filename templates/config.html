@@ -284,6 +284,15 @@ attached_categories
                                     data-category="{{ it.category }}" data-phase="{{ it.phase }}"
                                     data-office="{{ it.office }}" data-url="{{ it.url or '' }}">Edit</button>
 
+                                <form method="post" action="/elective_office/config/parse">
+                                    <input type="hidden" name="year" value="{{ it.year }}">
+                                    <input type="hidden" name="election_category" value="{{ it.category }}">
+                                    <input type="hidden" name="phase" value="{{ it.phase }}">
+                                    <input type="hidden" name="office" value="{{ it.office }}">
+                                    <button class="btn" type="submit">Parse</button>
+                                    <span class="spinner" aria-hidden="true" title="Processing"></span>
+                                </form>
+
                                 <form method="post" action="/elective_office/config/preprocess">
                                     <input type="hidden" name="year" value="{{ it.year }}">
                                     <input type="hidden" name="election_category" value="{{ it.category }}">
@@ -600,6 +609,7 @@ attached_categories
                 });
             });
         }
+        armSpinnerHandlers('form[action="/elective_office/config/parse"]');
         armSpinnerHandlers('form[action="/elective_office/config/preprocess"]');
         armSpinnerHandlers('form[action="/elective_office/config/calc"]');
     })();
