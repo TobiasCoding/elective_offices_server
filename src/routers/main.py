@@ -569,8 +569,6 @@ async def preprocess_and_calc(payload: dict = Body(...)):
 
     pre_res = do_preprocess(year, election_category, phase, office)
     calc_res = do_calc(year, election_category, phase, office, method=method)
-    import time as t
-    t.sleep(1)
     return JSONResponse({"ok": True, "preprocess": pre_res, "calc": calc_res})
 
 
