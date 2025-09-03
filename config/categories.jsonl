@@ -1,11 +1,11 @@
-{"category":"Nacional",    "office":"presidente y vice",         "method":"balotaje",           "paso":true, "general":true, "balotaje":true}
-{"category":"Nacional",    "office":"diputados",                 "method":"d-hont",             "paso":true, "general":true, "balotaje":false}
-{"category":"Nacional",    "office":"senadores",                 "method":"lista-incompleta",   "paso":true, "general":true, "balotaje":false}
-{"category":"Nacional",    "office":"parlamentarios nacionales", "method":"d-hont",             "paso":true, "general":true, "balotaje":false}
-{"category":"Nacional",    "office":"parlamentarios regionales", "method":"mayoria-simple",     "paso":true, "general":true, "balotaje":false}
-{"category":"Provincial",  "office":"gobernador y vice",         "method":"mayoria-simple",     "paso":true, "general":true, "balotaje":false}
-{"category":"Provincial",  "office":"diputados",                 "method":"d-hont",             "paso":true, "general":true, "balotaje":false}
-{"category":"Provincial",  "office":"senadores",                 "method":"d-hont",             "paso":true, "general":true, "balotaje":false}
-{"category":"Provincial",  "office":"intendente",                "method":"mayoria-simple",     "paso":true, "general":true, "balotaje":false}
-{"category":"Provincial",  "office":"concejales",                "method":"hare",               "paso":true, "general":true, "balotaje":false}
-{"category":"Provincial",  "office":"consejeros escolares",      "method":"hare",               "paso":true, "general":true, "balotaje":false}
+{"category":"Nacional",    "office":"presidente y vicepresidente",  "method":"balotaje",           "paso":true, "general":true, "balotaje":true}
+{"category":"Nacional",    "office":"diputados",                    "method":"d-hont",             "paso":true, "general":true, "balotaje":false}
+{"category":"Nacional",    "office":"senadores",                    "method":"lista-incompleta",   "paso":true, "general":true, "balotaje":false}
+{"category":"Nacional",    "office":"parlamentarios nacionales",    "method":"d-hont",             "paso":true, "general":true, "balotaje":false}
+{"category":"Nacional",    "office":"parlamentarios regionales",    "method":"mayoria-simple",     "paso":true, "general":true, "balotaje":false}
+{"category":"Provincial",  "office":"gobernador y vicegobernador",  "method":"mayoria-simple",     "paso":true, "general":true, "balotaje":false}
+{"category":"Provincial",  "office":"diputados",                    "method":"d-hont",             "paso":true, "general":true, "balotaje":false}
+{"category":"Provincial",  "office":"senadores",                    "method":"d-hont",             "paso":true, "general":true, "balotaje":false}
+{"category":"Provincial",  "office":"intendente",                   "method":"mayoria-simple",     "paso":true, "general":true, "balotaje":false}
+{"category":"Provincial",  "office":"concejales",                   "method":"hare",               "paso":true, "general":true, "balotaje":false}
+{"category":"Provincial",  "office":"consejeros escolares",         "method":"hare",               "paso":true, "general":true, "balotaje":false}

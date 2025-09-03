@@ -1,93 +1,266 @@
-{% extends "layout.html" %} {% block content %}
-<h2>Resultados procesados</h2>
-<p>Si una categoría no fue parseada aún, verás "-" en su lugar.</p>
-<table>
+{% extends "layout.html" %}
+{% block content %}
+<h2>Processed results</h2>
+
+<table id="results-table">
   <thead>
     <tr>
-      <th>Año</th>
-      <th style="width:22ch;">Acciones</th>
-      <th>ID Elección</th>
-      <th>Tipo</th>
-      <th>Categoría</th>
-      <th>Cargo</th>
-      <th>Método</th>
-      <th>URL API</th>
-      <th>Hash base</th>
-      <th>Últ. Calc</th>
-      <th>Resultado</th>
+      <!-- Visible column headers (translated) -->
+      <th>Year</th>
+      <th>Type</th>
+      <th>Category</th>
+      <th>Office</th>
+      <th>Method</th>
+      <th>Last Calc</th>
+      <th>Result</th>
+      <th class="actions">Actions</th>
+    </tr>
+    <!-- Filters row: will be populated by JS with available options per column -->
+    <tr id="filters-row">
+      <!-- Each <th> will receive a <select> built from unique values in that column -->
+      <th data-filter-for="Year"></th>
+      <th data-filter-for="Type"></th>
+      <th data-filter-for="Category"></th>
+      <th data-filter-for="Office"></th>
+      <th data-filter-for="Method"></th>
+      <th data-filter-for="Last Calc"></th>
+      <th data-filter-for="Result"></th>
+      <th><!-- no filter for Actions --></th>
     </tr>
   </thead>
   <tbody>
     {% for row in rows %}
-    <tr>
+    <tr data-year="{{ row.year }}" data-type="{{ row.election_type }}" data-category="{{ row.category }}"
+      data-office="{{ row.office }}" data-method="{{ row.method }}" data-lastcalc="{{ row.last_calc or '-' }}"
+      data-hasresult="{{ 'yes' if row.result else 'no' }}">
       <td>{{ row.year }}</td>
-      <td class="actions">
-        <button class="btn warn" type="button" data-rename-year="{{ row.year }}">Renombrar</button>
-        <button class="btn danger" type="button" data-delete-year="{{ row.year }}">Eliminar</button>
-      </td>
-      <td>{{ row.election_id }}</td>
       <td>{{ row.election_type }}</td>
       <td>{{ row.category }}</td>
       <td>{{ row.office }}</td>
       <td>{{ row.method }}</td>
-      <td class="mono">{{ row.url or '-' }}</td>
-      <td class="mono">{{ row.base_sha256 or '-' }}</td>
       <td>{{ row.last_calc or '-' }}</td>
       <td>
         {% if row.result %}
         <details>
-          <summary class="btn ok">Ver asignación</summary>
+          <summary class="btn ok">View allocation</summary>
           <pre class="mono">{{ row.result|tojson(indent=2) }}</pre>
         </details>
-        {% else %} - {% endif %}
+        {% else %}
+        -
+        {% endif %}
+      </td>
+      <td class="right">
+        <!-- Single action: Sync & Calc (rightmost). 
+             Uses data-* attributes from the row for payload. -->
+        <button class="btn primary sync-btn" type="button" data-year="{{ row.year }}"
+          data-type="{{ row.election_type }}" data-category="{{ row.category }}" data-office="{{ row.office }}"
+          data-method="{{ row.method }}" title="Synchronize sources and calculate results">
+          Sync &amp; Calc
+        </button>
       </td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
 
-<!-- Formularios ocultos para acciones de Año -->
-<form id="frmRenameYear" method="post" action="/elective_office/config/rename_year" style="display:none;">
-  <input type="hidden" name="old_year" id="oldYearField" />
-  <input type="hidden" name="new_year" id="newYearField" />
-  <!-- submit real se hace por JS -->
-  <button type="submit">submit</button>
-  </form>
-<form id="frmDeleteYear" method="post" action="/elective_office/config/delete_year" style="display:none;">
-  <input type="hidden" name="year" id="delYearField" />
-  <button type="submit">submit</button>
-  </form>
+<!-- Minimal styles; rely on existing .btn/.ok/.mono if defined in layout.css -->
+<style>
+  #results-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  #results-table th,
+  #results-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid #ddd;
+    vertical-align: top;
+  }
+
+  #results-table thead th {
+    text-align: left;
+  }
+
+  #results-table thead tr#filters-row th {
+    padding: 6px 10px;
+  }
+
+  #results-table select {
+    width: 100%;
+    max-width: 220px;
+  }
+
+  td.right,
+  th.actions {
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .btn {
+    cursor: pointer;
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    background: #3b3b3b;
+  }
+
+  .btn.primary {
+    background: rgb(78, 78, 78);
+    border-color: #aac;
+  }
+
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+  }
+</style>
 
 <script>
-  (function () {
-    // Renombrar año
-    document.querySelectorAll('[data-rename-year]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const oldYear = btn.getAttribute('data-rename-year');
-        const proposed = prompt(`Nuevo valor para el año ${oldYear}:`, oldYear);
-        if (!proposed) return;
-        const trimmed = proposed.trim();
-        if (!/^\d{4}$/.test(trimmed)) {
-          alert('El año debe tener 4 dígitos.');
-          return;
-        }
-        const $frm = document.getElementById('frmRenameYear');
-        document.getElementById('oldYearField').value = oldYear;
-        document.getElementById('newYearField').value = trimmed;
-        $frm.submit();
+  // --- Helper: extract a normalized display value for a cell (used in filtering) ---
+  function cellDisplayValue(td, colName) {
+    // For "Result" we consider "With result" vs "-"
+    if (colName === "Result") {
+      const hasDetails = td.querySelector("details") !== null;
+      return hasDetails ? "With result" : "-";
+    }
+    const text = (td.textContent || "").trim();
+    return text === "" ? "-" : text;
+  }
+
+  // --- Build filter selects using unique values found in each column ---
+  document.addEventListener("DOMContentLoaded", () => {
+    const table = document.getElementById("results-table");
+    const thead = table.querySelector("thead");
+    const filtersRow = document.getElementById("filters-row");
+    const tbody = table.querySelector("tbody");
+
+    // Column mapping (visible columns only; Actions excluded)
+    const columns = ["Year", "Type", "Category", "Office", "Method", "Last Calc", "Result"];
+    const headerCells = Array.from(thead.querySelectorAll("tr:first-child th"));
+    const colIndexByName = {};
+    columns.forEach(name => {
+      const idx = headerCells.findIndex(th => (th.textContent || "").trim() === name);
+      if (idx >= 0) colIndexByName[name] = idx;
+    });
+
+    // Collect unique values per column by scanning the current rows
+    const uniques = {};
+    columns.forEach(name => uniques[name] = new Set());
+
+    Array.from(tbody.rows).forEach(tr => {
+      columns.forEach(name => {
+        const idx = colIndexByName[name];
+        if (idx == null) return;
+        const td = tr.cells[idx];
+        if (!td) return;
+        uniques[name].add(cellDisplayValue(td, name));
       });
     });
 
-    // Eliminar año
-    document.querySelectorAll('[data-delete-year]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        const year = btn.getAttribute('data-delete-year');
-        if (!confirm(`¿Eliminar el año ${year}? Se perderá toda su configuración.`)) return;
-        const $frm = document.getElementById('frmDeleteYear');
-        document.getElementById('delYearField').value = year;
-        $frm.submit();
+    // Populate the <select> filters
+    columns.forEach(name => {
+      const th = filtersRow.querySelector(`th[data-filter-for="${name}"]`);
+      if (!th) return;
+      const sel = document.createElement("select");
+      sel.setAttribute("data-col-name", name);
+
+      // "All" option
+      const optAll = document.createElement("option");
+      optAll.value = "";
+      optAll.textContent = "All";
+      sel.appendChild(optAll);
+
+      // Sorted unique options
+      const sortedVals = Array.from(uniques[name]).sort((a, b) => {
+        // Numeric sort for Year; lexical for others
+        if (name === "Year") {
+          const an = parseInt(a, 10), bn = parseInt(b, 10);
+          if (!isNaN(an) && !isNaN(bn)) return an - bn;
+        }
+        return ("" + a).localeCompare("" + b);
       });
+      for (const v of sortedVals) {
+        const opt = document.createElement("option");
+        opt.value = v;
+        opt.textContent = v;
+        sel.appendChild(opt);
+      }
+
+      // Change handler triggers filtering
+      sel.addEventListener("change", applyFilters);
+      th.appendChild(sel);
     });
-  })();
+
+    // Add a small "Reset" button at the end of the filters row (Actions column)
+    const actionsFilterTh = filtersRow.lastElementChild;
+    const resetBtn = document.createElement("button");
+    resetBtn.type = "button";
+    resetBtn.className = "btn";
+    resetBtn.textContent = "Reset filters";
+    resetBtn.addEventListener("click", () => {
+      filtersRow.querySelectorAll("select").forEach(s => s.value = "");
+      applyFilters();
+    });
+    actionsFilterTh.appendChild(resetBtn);
+
+    // Filtering logic: show only rows that match all selected filters
+    function applyFilters() {
+      const active = {};
+      filtersRow.querySelectorAll("select").forEach(s => {
+        const col = s.getAttribute("data-col-name");
+        active[col] = s.value; // empty string means "All"
+      });
+
+      Array.from(tbody.rows).forEach(tr => {
+        let visible = true;
+        for (const colName of columns) {
+          const wanted = active[colName];
+          if (!wanted) continue; // no filter for this column
+          const idx = colIndexByName[colName];
+          const td = tr.cells[idx];
+          const val = cellDisplayValue(td, colName);
+          if (val !== wanted) { visible = false; break; }
+        }
+        tr.style.display = visible ? "" : "none";
+      });
+    }
+
+    // --- Sync & Calc action handler (single action, rightmost column) ---
+    tbody.addEventListener("click", async (ev) => {
+      const btn = ev.target.closest(".sync-btn");
+      if (!btn) return;
+      btn.disabled = true;
+      const tr = btn.closest("tr");
+
+      // Build a JSON payload from row attributes
+      const payload = {
+        year: tr.getAttribute("data-year"),
+        election_type: tr.getAttribute("data-type"),
+        category: tr.getAttribute("data-category"),
+        office: tr.getAttribute("data-office"),
+        method: tr.getAttribute("data-method")
+      };
+
+      try {
+        // POST to backend endpoint (adjust path if needed)
+        const res = await fetch("/api/sync-calc", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error("Request failed: " + res.status);
+        // Optional: give quick feedback
+        btn.textContent = "Queued ✓";
+      } catch (e) {
+        console.error(e);
+        alert("Sync & Calc failed. Check logs.");
+        btn.disabled = false;
+      }
+    });
+  });
 </script>
 {% endblock %}

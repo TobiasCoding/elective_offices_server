@@ -112,6 +112,15 @@ attached_categories
     {% if flt_category %}
     {% set category_exists = flt_category in existing_categories %}
     <div class="col" style="margin-top:12px; gap:12px;">
+            {% if flt_category == 'Nacional' %}
+            <note>
+                Cols: NACIONAL. TERMINAR DE DEFINIR
+            </note>
+            {% else %}
+            <note>
+                Cols: PROVINCIAL. TERMINAR DE DEFINIR
+            </note>
+            {% endif %}
         <div class="row" style="gap:12px; align-items:center;">
             {% if category_exists and sel_cat_excel %}
             <span class="muted" title="{{ sel_cat_excel }}">File: {{ sel_cat_excel }}</span>

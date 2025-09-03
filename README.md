@@ -1,5 +1,3 @@
-# README.md
-
 # Elective Office Server (FastAPI)
 
 Servidor FastAPI para gestionar URLs de resultados electorales, preprocesar CSVs y calcular distribución de cargos (D'Hondt, Hare, Lista Incompleta, Mayoría Simple) con UI mínima.
