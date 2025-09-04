@@ -359,16 +359,23 @@
           delete other.positive;
 
           const gid2name = (data && data.groups) ? data.groups : {};
+          // NEW: mapa de asientos por group_id (puede no existir)
+          const seatsByGroup = (c && c.seats && c.seats.by_group) ? c.seats.by_group : {};
+
           const posRows = Object.keys(pos)
-              .sort((a, b) => (a === 'all') ? 1 : (b === 'all') ? -1 : a.localeCompare(b))
-              .map(k => {
-                  const name = (k === 'all') ? '' : (gid2name[k] || 'undefined');
-                  return `<tr>
-                        <td class="mono">${k}</td>
-                        <td>${name}</td>
-                        <td class="mono" style="text-align:right">${pos[k].toLocaleString('en-US')}</td>
-                      </tr>`;
-                }).join('');
+            .sort((a, b) => (a === 'all') ? 1 : (b === 'all') ? -1 : a.localeCompare(b))
+            .map(k => {
+              const name = (k === 'all') ? '' : (gid2name[k] || 'undefined');
+              // Para 'all' dejamos vacío; para grupos concretos mostramos 0 si no hay asignación
+              const seatCount = (k === 'all') ? '' : (seatsByGroup[k] ?? 0);
+              return `<tr>
+              <td class="mono">${k}</td>
+              <td>${name}</td>
+              <td class="mono" style="text-align:right">${pos[k].toLocaleString('en-US')}</td>
+              <td class="mono" style="text-align:right">${seatCount}</td>
+            </tr>`;
+            }).join('');
+
 
           let otherRows = '';
           for (const k of Object.keys(other)) {
@@ -381,7 +388,7 @@
               <div>
                 <div><em>Positive (by group_id)</em></div>
                 <table>
-                  <thead><tr><th>group_id</th><th>group_name</th><th>votes</th></tr></thead>
+                  <thead><tr><th>group_id</th><th>group_name</th><th>votes</th><th>seats</th></tr></thead>
                   <tbody>${posRows}</tbody>
                 </table>
               </div>

@@ -2,38 +2,75 @@ from typing import Dict, List, Tuple, Iterable
 from src.helpers.db import load_db, save_db
 from fastapi import HTTPException
 import json
-from config.config import DATA_DIR
+from config.config import DATA_DIR, CATEGORIES_PATH
 from src.helpers.utils import _now_iso
 from src.helpers.logger import log_append
+from pathlib import Path
 
 # ============================================================
 # CÁLCULO PRINCIPAL
 # ============================================================
 
-def do_calc(year: str, election_category: str, phase: str, office: str, method: str | None = None) -> dict:
-    """
-    Calcula:
-      - POSITIVO (vote_type=0): suma por group_id
-      - Resto (impugnado/recurrido/comando/en_blanco/nulo): totales globales (sin desglosar por grupo)
-      - Según 'method', asigna bancas/representantes por group_id y lo guarda en calc.all.seats
+from src.helpers.db import get_seats
 
-    Además:
-      - La cantidad de cargos a distribuir (seats) se resuelve así, en orden:
-        1) Si meta['seats'] > 0 en db.json (entries -> office), se usa ese valor.
-        2) Si no, se busca en el JSONL apuntado por category['seats_jsonl'] (config/db.json):
-           * Si una línea trae "seats": N, se suma ese N cuando el nombre del cargo coincida.
-           * Si no hay "seats", se cuenta 1 por cada línea cuyo "nombre_cargo" coincida.
-           * Coincidencia por nombre normalizado con candidatos: meta.get("nombre_cargo"), meta.get("office_name"), 'office'.
-    Estructura final en el preprocesado:
-        payload["calc"]["all"] = {
-            "positive": { "<group_id>": votos, ..., "all": total_positivo },
-            "impugnado": N, "recurrido": N, "comando": N, "en_blanco": N, "nulo": N,
-            "all": total_de_todos_los_tipos,
-            "seats": { "method": "...", "by_group": {...}, "meta": {...} }   # si method provisto
-        }
+def do_calc(year: str, election_category: str, phase: str, office: str) -> dict:
     """
-    print(f"[CALC] year={year} category={election_category} phase={phase} office={office} method={method}")
+    Calcula y persiste el bloque 'calc.all' en el JSON preprocesado.
 
+    CAMBIO CLAVE:
+    - 'method' se toma SIEMPRE desde config/categories.jsonl (clave 'method' para el par
+      (category=election_category, office=office)), validando que la fase ('paso'/'general'/'balotaje')
+      sea aplicable (boolean true en esa línea). El parámetro 'method' recibido se ignora.
+
+    Estructura final en payload['calc']['all']:
+      {
+        "positive": { "<group_id>": votos, ..., "all": total_positivo },
+        "impugnado": N, "recurrido": N, "comando": N, "en_blanco": N, "nulo": N,
+        "all": total_de_todos_los_tipos,
+        "seats": { "method": "...", "by_group": {...}, "meta": {...} }   # sólo si hay método soportado
+      }
+    """
+    print(f"[CALC] year={year} category={election_category} phase={phase} office={office}")
+
+    # ---------- 0) Resolver método desde categories.jsonl (sin fallbacks) ----------
+    # Cargamos categories.jsonl y buscamos la línea exacta por categoría y office.
+    # Además, exigimos que la fase indicada sea aplicable (boolean true).
+    phase_key = (phase or "").strip().lower()
+    if phase_key not in ("paso", "general", "balotaje"):
+        raise HTTPException(400, "Fase inválida: debe ser PASO, GENERAL o BALOTAJE")
+
+    try:
+        # Lectura estricta del JSONL (sin depender de otros módulos)
+        items = []
+        with CATEGORIES_PATH.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                items.append(json.loads(line))
+    except FileNotFoundError:
+        raise HTTPException(400, f"No existe categories.jsonl en: {CATEGORIES_PATH}")
+    except json.JSONDecodeError as e:
+        raise HTTPException(400, f"categories.jsonl inválido: {e}")
+
+    matched = None
+    for it in items:
+        if not isinstance(it, dict):
+            continue
+        if it.get("category") == election_category and it.get("office") == office:
+            matched = it
+            break
+    if matched is None:
+        raise HTTPException(400, "Categoría/Cargo no está definido en categories.jsonl")
+
+    if not bool(matched.get(phase_key, False)):
+        raise HTTPException(400, f"{phase} no aplica para este cargo según categories.jsonl")
+
+    method = matched.get("method")
+    if not isinstance(method, str) or not method.strip():
+        raise HTTPException(400, "Método ausente o inválido en categories.jsonl para este cargo")
+
+    # ---------- 1) Cargar metadatos de db.json y archivo preprocesado ----------
     db = load_db()
     try:
         cat_node = db[year]["categories"][election_category]
@@ -49,61 +86,68 @@ def do_calc(year: str, election_category: str, phase: str, office: str, method: 
     if not pre_path.exists():
         raise HTTPException(400, f"Archivo preprocesado no encontrado: {pre_path}")
 
-    # Cargar preprocesado existente
-    payload = json.loads(pre_path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(pre_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        raise HTTPException(500, f"Error leyendo preprocessed_json: {e}")
+
     rows = payload.get("rows", [])
 
-    # --- 1) Agregaciones de votos ---
+    # ---------- 2) Agregaciones de votos ----------
     positive_by_group, others_totals = _aggregate_votes(rows)
-
     total_positive = sum(positive_by_group.values())
     positive_block = positive_by_group | {"all": total_positive}
     total_all = total_positive + sum(others_totals.values())
     all_block = {"positive": positive_block} | others_totals
     all_block["all"] = total_all
 
-    # --- 2) Resolver seats desde db.json o seats_jsonl ---
-    seats = _resolve_seats_from_jsonl_or_meta(db, year, election_category, phase, office, rows)
+    # ---------- 3) Resolver 'seats' (según jsonl o meta) ----------
+    # print(f"tipo_cargo: {election_category}")
+    # print(f"office: {office}")
+    seats = get_seats(db, rows, year, election_category, phase, office)
 
-    # --- 3) Asignación de bancas según método (opcional) ---
+    # ---------- 4) Asignación según método tomado de categories.jsonl ----------
     seats_info = {}
-    if method:
-        method_lc = method.strip().lower()
+    method_lc = method.strip().lower()
 
-        if method_lc in ("d-hont", "dhont", "d'hont"):
-            by_group, extra_meta = _alloc_dhondt(positive_by_group, seats)
-            seats_info = {"method": "d-hont", "by_group": by_group, "meta": extra_meta}
+    print(f"INPUT:\nmethod_lc: {method_lc}\npositive_by_group: {positive_by_group}\nseats: {seats}")
 
-        elif method_lc == "hare":
-            by_group, extra_meta = _alloc_hare(positive_by_group, seats)
-            seats_info = {"method": "hare", "by_group": by_group, "meta": extra_meta}
+    if method_lc in ("d-hont", "dhont", "d'hont"):
+        by_group, extra_meta = _alloc_dhondt(positive_by_group, seats)
+        seats_info = {"method": "d-hont", "by_group": by_group, "meta": extra_meta}
 
-        elif method_lc == "lista-incompleta":
-            by_group, extra_meta = _alloc_lista_incompleta(positive_by_group, seats)
-            seats_info = {"method": "lista-incompleta", "by_group": by_group, "meta": extra_meta}
+    elif method_lc == "hare":
+        by_group, extra_meta = _alloc_hare(positive_by_group, seats)
+        seats_info = {"method": "hare", "by_group": by_group, "meta": extra_meta}
 
-        elif method_lc in ("mayoria-simple", "mayoría-simple"):
-            by_group, extra_meta = _alloc_mayoria_simple(positive_by_group, seats)
-            seats_info = {"method": "mayoria-simple", "by_group": by_group, "meta": extra_meta}
+    elif method_lc == "lista-incompleta":
+        by_group, extra_meta = _alloc_lista_incompleta(positive_by_group, seats)
+        seats_info = {"method": "lista-incompleta", "by_group": by_group, "meta": extra_meta}
 
-        elif method_lc in ("balotaje", "ballotage"):
-            by_group, extra_meta = _eval_balotaje(positive_by_group, seats)
-            seats_info = {"method": "balotaje", "by_group": by_group, "meta": extra_meta}
+    elif method_lc in ("mayoria-simple", "mayoría-simple"):
+        by_group, extra_meta = _alloc_mayoria_simple(positive_by_group, seats)
+        seats_info = {"method": "mayoria-simple", "by_group": by_group, "meta": extra_meta}
 
-        else:
-            seats_info = {"method": method, "by_group": {}, "meta": {"error": "método no soportado"}}
+    elif method_lc in ("balotaje", "ballotage"):
+        by_group, extra_meta = _eval_balotaje(positive_by_group, seats)
+        seats_info = {"method": "balotaje", "by_group": by_group, "meta": extra_meta}
+
+    else:
+        raise HTTPException(400, f"Método no soportado: {method}")
+
+    print(f"OUTPUT:\nby_group: {by_group}\nextra_meta: {extra_meta}")
 
     if seats_info:
         all_block["seats"] = seats_info
 
-    # --- 4) Persistir resultado de cálculo ---
+    # ---------- 5) Persistir resultado ----------
     if "calc" not in payload or not isinstance(payload["calc"], dict):
         payload["calc"] = {}
     payload["calc"]["all"] = all_block
 
     pre_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
-    # Marca de último cálculo
+    # Marcar último cálculo en db.json
     meta["last_calc"] = _now_iso()
     save_db(db)
 
@@ -123,106 +167,8 @@ def do_calc(year: str, election_category: str, phase: str, office: str, method: 
         "groups": len(positive_by_group),
         "totals": others_totals,
         "seats": seats,
-        "assignment": seats_info or None,
+        "assignment": seats_info,
     }
-
-
-# ============================================================
-# RESOLVER SEATS DESDE JSONL O META
-# ============================================================
-
-def _resolve_seats_from_jsonl_or_meta(db: dict, year: str, election_category: str, phase: str, office: str, rows: List[dict]) -> int:
-    """
-    1) Usa meta['seats'] si existe (>0).
-    2) Si no, busca category['seats_jsonl'] y calcula:
-       - Si las líneas del JSONL tienen "seats": N, suma N para las que matcheen el cargo.
-       - Si no traen "seats", cuenta 1 por línea que matchee.
-    * Match por nombre de cargo normalizado.
-    * Candidatos para nombre de cargo: meta['nombre_cargo'], meta['office_name'], 'office' (parámetro).
-    """
-    seats = 0
-    try:
-        meta = db[year]["categories"][election_category]["phases"][phase]["entries"][office]
-    except KeyError:
-        return 0
-
-    # 1) meta['seats']
-    raw_seats = meta.get("seats")
-    try:
-        if raw_seats is not None:
-            s = int(raw_seats)
-            if s > 0:
-                return s
-    except Exception:
-        pass
-
-    # 2) seats_jsonl a nivel categoría
-    try:
-        cat_node = db[year]["categories"][election_category]
-    except KeyError:
-        return 0
-    seats_jsonl_rel = (cat_node or {}).get("seats_jsonl")
-    if not seats_jsonl_rel:
-        return 0
-
-    seats_path = (DATA_DIR / seats_jsonl_rel).resolve()
-    if not seats_path.exists():
-        return 0
-
-    try:
-        items = load_jsonl(seats_path)  # lista de dicts
-    except Exception:
-        return 0
-
-    # nombres candidatos de cargo a matchear
-    candidates = [
-        str(meta.get("nombre_cargo") or "").strip(),
-        str(meta.get("office_name") or "").strip(),
-        str(office or "").strip(),
-    ]
-    candidates = [c for c in candidates if c]
-    if not candidates:
-        return 0
-
-    cand_norm = {_norm(c) for c in candidates}
-
-    total = 0
-    for it in _iter_dicts(items):
-        nombre_cargo = _norm(str(it.get("nombre_cargo") or ""))
-        if not nombre_cargo:
-            continue
-        if nombre_cargo in cand_norm:
-            # Si el jsonl provee 'seats' explícito, usarlo; si no, sumar 1 por línea.
-            val = it.get("seats")
-            try:
-                if val is not None:
-                    total += int(val)
-                else:
-                    total += 1
-            except Exception:
-                total += 1
-
-    return max(0, total)
-
-
-def _iter_dicts(items: Iterable) -> Iterable[dict]:
-    for it in items:
-        if isinstance(it, dict):
-            yield it
-
-
-def _norm(s: str) -> str:
-    # Normalización simple para comparar nombres
-    s = s.lower().strip()
-    repl = {
-        "á": "a", "é": "e", "í": "i", "ó": "o", "ú": "u",
-        "ü": "u", "ñ": "n",
-    }
-    for k, v in repl.items():
-        s = s.replace(k, v)
-    # espacios múltiples -> uno
-    s = " ".join(s.split())
-    return s
 
 
 # ============================================================
@@ -262,6 +208,8 @@ def _alloc_dhondt(votes: Dict[str, int], seats: int) -> Tuple[Dict[str, int], di
     """
     D'Hondt (promedios más altos).
     """
+    # print(f"votes: {votes}")
+    # print(f"seats: {seats}")
     result = {gid: 0 for gid in votes.keys()}
     if seats <= 0 or not votes:
         return result, {"seats": seats, "note": "sin asignación (seats<=0 o sin votos)"}
@@ -406,3 +354,5 @@ def _eval_balotaje(votes: Dict[str, int], seats: int) -> Tuple[Dict[str, int], d
         result = {gid: 0 for gid in votes.keys()}  # se definirá tras el balotaje
 
     return result, meta
+
+

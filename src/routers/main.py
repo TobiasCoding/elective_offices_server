@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from src.calc.calc import do_calc
 import os, json, hashlib, csv, io, datetime
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -11,7 +12,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from src.helpers.db import load_db, save_db
-from src.helpers.logger import _now_iso
+from src.helpers.logger import log_append
+from src.helpers.utils import _now_iso
 
 # ================= Paths & bootstrap =================
 from config.config import *
@@ -456,6 +458,7 @@ def excel_bytes_to_jsonl_rows(data: bytes) -> list[dict]:
         "numero_seccion_electoral",
         "tipo_cargo",
         "nombre_cargo",
+        "cantidad_cargos",
     ]
 
     df = pd.read_excel(io.BytesIO(data), dtype=object)
@@ -892,8 +895,6 @@ async def preprocess(
         status_code=303,
     )
 
-from src.calc.calc import do_calc
-
 @router.post("/config/calc")
 async def calc(
     year: str = Form(...),
@@ -905,7 +906,7 @@ async def calc(
     Ahora usa do_calc(...) (stub con print). 
     Por ahora method se deja en None; se podrá inferir/validar luego.
     """
-    _ = do_calc(year, election_category, phase, office, method=None)
+    _ = do_calc(year, election_category, phase, office)
 
     return RedirectResponse(
         f"/elective_office/config?flt_year={year}&flt_category={election_category}&flt_phase={phase}",
@@ -933,13 +934,12 @@ async def preprocess_and_calc(payload: dict = Body(...)):
     phase = str(payload.get("election_type", "")).strip()          # mapea a 'phase'
     election_category = str(payload.get("category", "")).strip()   # mapea a 'election_category'
     office = str(payload.get("office", "")).strip()
-    method = payload.get("method")
 
     if not (year and phase and election_category and office):
         return JSONResponse({"ok": False, "error": "Parámetros requeridos: year, election_type, category, office"}, status_code=400)
 
     pre_res = do_preprocess(year, election_category, phase, office)
-    calc_res = do_calc(year, election_category, phase, office, method=method)
+    calc_res = do_calc(year, election_category, phase, office)
     return JSONResponse({"ok": True, "preprocess": pre_res, "calc": calc_res})
 
 
