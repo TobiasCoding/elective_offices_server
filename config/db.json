@@ -161,7 +161,7 @@
               },
               "concejales": {
                 "method": "hare",
-                "url": null,
+                "url": "http://resultados.mininterior.gob.ar/api/resultado/totalizadocsv?a%C3%B1o=2023&recuento=Provisorio&idEleccion=2&idCargo=3&idDistrito=2",
                 "seats": null,
                 "base_sha256": null,
                 "last_processed": null,
@@ -180,7 +180,7 @@
             }
           }
         },
-        "seats_json": "preprocessed_data/2025__Provincial__seats__f487bc1e46fe1c1439e5e0414e15fe883f644e24baca9e4c284ddb6e42c9cb0d.json"
+        "seats_jsonl": "preprocessed_data/2025__Provincial__seats__dd4fd71c4dbea487f807121eb30e932002a8b8ae5f52360213c2b7dd236ac354.jsonl"
       }
     }
   }

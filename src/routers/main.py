@@ -10,6 +10,8 @@ from fastapi import FastAPI, APIRouter, Request, Form, Query, HTTPException, Upl
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from src.helpers.db import load_db, save_db
+from src.helpers.logger import _now_iso
 
 # ================= Paths & bootstrap =================
 from config.config import *
@@ -21,23 +23,6 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 router = APIRouter(prefix="/elective_office")
 
 # ================= Utils =================
-def _now_iso() -> str:
-    return datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
-
-def _log_key(year: str, election_category: str, phase: str, office: str) -> Path:
-    safe = f"{year}__{election_category}__{phase}__{office}".replace("/", "-")
-    return LOGS_DIR / f"{safe}.log"
-
-def log_append(year: str, election_category: str, phase: str, office: str, msg: str) -> None:
-    p = _log_key(year, election_category, phase, office)
-    with p.open("a", encoding="utf-8") as f:
-        f.write(f"[{_now_iso()}] {msg}\n")
-
-def read_log(year: str, election_category: str, phase: str, office: str) -> str:
-    p = _log_key(year, election_category, phase, office)
-    if not p.exists():
-        return "(sin logs)"
-    return p.read_text(encoding="utf-8", errors="replace")
 
 def excel_bytes_to_records(data: bytes) -> List[dict]:
     """
@@ -66,16 +51,6 @@ def load_jsonl(path: Path) -> List[dict]:
                 raise HTTPException(400, f"JSONL inválido en {path}: {e}")
     return items
 
-def load_db() -> dict:
-    if not DB_PATH.exists():
-        return {}
-    try:
-        return json.loads(DB_PATH.read_text(encoding="utf-8"))
-    except Exception as e:
-        raise HTTPException(500, f"db.json corrupto: {e}")
-
-def save_db(db: dict) -> None:
-    DB_PATH.write_text(json.dumps(db, ensure_ascii=False, indent=2), encoding="utf-8")
 
 def ensure_year(db: dict, year: str) -> None:
     if year not in db:
@@ -463,6 +438,53 @@ async def delete_year(year: str = Form(...)):
     save_db(db)
     return RedirectResponse("/elective_office/config", status_code=303)
 
+def excel_bytes_to_jsonl_rows(data: bytes) -> list[dict]:
+    """
+    Lee la primera hoja del Excel y devuelve filas con SOLO las columnas requeridas:
+    tipo_escala_territorial | nombre_escala_territorial | numero_seccion_electoral | tipo_cargo | nombre_cargo
+
+    - Normaliza encabezados (strip)
+    - Convierte NaN a None
+    - numero_seccion_electoral intenta int; si falla, deja None
+    """
+    import io
+    import pandas as pd
+
+    required = [
+        "tipo_escala_territorial",
+        "nombre_escala_territorial",
+        "numero_seccion_electoral",
+        "tipo_cargo",
+        "nombre_cargo",
+    ]
+
+    df = pd.read_excel(io.BytesIO(data), dtype=object)
+    df.columns = [str(c).strip() for c in df.columns]
+    df = df.where(pd.notnull(df), None)
+
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise HTTPException(400, f"Excel inválido: faltan columnas {missing}")
+
+    # Nos quedamos solo con las columnas requeridas (en ese orden)
+    df = df[required].copy()
+
+    # numero_seccion_electoral -> int si se puede, si no None
+    def _to_int_or_none(x):
+        if x is None:
+            return None
+        try:
+            # Acepta "123", 123.0, etc.
+            n = int(float(str(x).strip()))
+            return n
+        except Exception:
+            return None
+
+    df["numero_seccion_electoral"] = df["numero_seccion_electoral"].map(_to_int_or_none)
+
+    # A dicts orient="records"
+    return df.to_dict(orient="records")
+
 
 @router.post("/config/attach_category")
 async def attach_category(
@@ -482,26 +504,31 @@ async def attach_category(
     excel_path = FILES_DIR / f"{year}__{election_category}.xlsx"
     excel_path.write_bytes(data)
 
-    # 2) Transformar a JSON y guardar en preprocessed_data/
+    # 2) Transformar a JSONL y guardar en preprocessed_data/
     digest = sha256_of_bytes(data)
-    json_name = f"{year}__{election_category}__seats__{digest}.json"
-    json_path = PRE_DIR / json_name
+    jsonl_name = f"{year}__{election_category}__seats__{digest}.jsonl"
+    jsonl_path = PRE_DIR / jsonl_name
     try:
-        records = excel_bytes_to_records(data)   # <- usa el helper nuevo
+        rows = excel_bytes_to_jsonl_rows(data)  # <- valida y normaliza las 5 columnas
     except Exception as e:
-        raise HTTPException(400, f"Error leyendo Excel: {e}")
+        raise HTTPException(400, f"Error leyendo/validando Excel: {e}")
 
-    json_path.write_text(json.dumps(records, ensure_ascii=False, indent=2), encoding="utf-8")
+    # Escribe una línea por item
+    write_jsonl(jsonl_path, rows)
 
-    # 3) Actualizar db.json (conserva ruta del Excel y agrega seats_json)
+    # 3) Actualizar db.json (ruta del Excel y seats_jsonl)
     db = load_db()
     ensure_category(db, year, election_category)
     cat = db[year]["categories"][election_category]
-    cat["seats_excel"] = str(excel_path.relative_to(DATA_DIR))
-    cat["seats_json"]  = str(json_path.relative_to(DATA_DIR))  # NUEVO campo de referencia
+    cat["seats_excel"]  = str(excel_path.relative_to(DATA_DIR))
+    cat["seats_jsonl"]  = str(jsonl_path.relative_to(DATA_DIR))  # nuevo campo; sustituye seats_json
+    # si querés, eliminar el viejo si existiera:
+    if "seats_json" in cat:
+        del cat["seats_json"]
     save_db(db)
 
     return RedirectResponse("/elective_office/config", status_code=303)
+
 
 
 @router.post("/config/create_phase")
@@ -830,103 +857,6 @@ def do_preprocess(year: str, election_category: str, phase: str, office: str) ->
 
 
 
-def do_calc(year: str, election_category: str, phase: str, office: str, method: str | None = None) -> dict:
-    """
-    Calcula:
-      - POSITIVO (vote_type=0): suma por group_id
-      - Resto (impugnado/recurrido/comando/en_blanco/nulo): totales globales (sin desglosar por grupo)
-    Inserta el bloque: "calc": { "all": { "positive": {...}, "impugnado": N, "recurrido": N, ... } }
-    sobre el JSON preprocesado.
-    """
-    print(f"[CALC] year={year} category={election_category} phase={phase} office={office} method={method}")
-
-    db = load_db()
-    try:
-        meta = db[year]["categories"][election_category]["phases"][phase]["entries"][office]
-        print("Meta. Done")
-    except KeyError:
-        print("Meta. KeyError")
-        raise HTTPException(404, "Entrada no encontrada en db.json")
-
-    pre_rel = (meta or {}).get("preprocessed_json")
-    if not pre_rel:
-        print("Preprocessed. KeyError")
-        raise HTTPException(400, "Falta preprocesado (no existe preprocessed_json en db.json)")
-
-    pre_path = (DATA_DIR / pre_rel).resolve()
-    if not pre_path.exists():
-        print("Preprocessed. KeyError")
-        raise HTTPException(400, f"Archivo preprocesado no encontrado: {pre_path}")
-
-    # Cargar preprocesado existente
-    payload = json.loads(pre_path.read_text(encoding="utf-8"))
-    rows = payload.get("rows", [])
-    print("Rows. Done")
-
-    # --- Acumuladores ---
-    positive_by_group: dict[str, int] = {}
-
-    # mapeo nombres legibles para tipos no-positivo
-    type_names = {
-        1: "impugnado",
-        2: "recurrido",
-        3: "comando",
-        5: "en_blanco",
-        6: "nulo",
-    }
-    others_totals = {name: 0 for name in type_names.values()}
-
-    # --- Recorrer filas ---
-    for r in rows:
-        vt = r.get("vote_type")
-        vn = int(r.get("vote_number") or 0)
-
-        if vt == 0:  # POSITIVO -> por grupo
-            gid = str(r.get("group_id") or "null")
-            positive_by_group[gid] = positive_by_group.get(gid, 0) + vn
-        else:
-            # Solo sumar los tipos mapeados; ignorar otros códigos/desconocidos
-            name = type_names.get(vt)
-            if name:
-                others_totals[name] += vn
-
-    # --- Construir bloque calc.all ---
-    total_positive = sum(positive_by_group.values())
-    positive_block = positive_by_group | {"all": total_positive}
-
-    # Sumar todos los votos: positivos + otros tipos
-    total_all = total_positive + sum(others_totals.values())
-
-    all_block = {"positive": positive_block} | others_totals
-    all_block["all"] = total_all
-
-    payload["calc"] = {"all": all_block}
-
-    # Sobrescribir archivo preprocesado
-    pre_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-
-    # Actualizar db.json con marca de último cálculo
-    meta["last_calc"] = _now_iso()
-    save_db(db)
-
-    log_append(
-        year, election_category, phase, office,
-        f"Calc OK -> {pre_path.name} (rows={len(rows)}, groups={len(positive_by_group)})"
-    )
-    print("Calc. Done")
-
-    return {
-        "ok": True,
-        "stage": "calc",
-        "year": year,
-        "category": election_category,
-        "phase": phase,
-        "office": office,
-        "method": method,
-        "groups": len(positive_by_group),
-        "totals": others_totals,
-    }
-
 
 @router.post("/config/parse")
 async def parse(
@@ -961,6 +891,8 @@ async def preprocess(
         f"/elective_office/config?flt_year={year}&flt_category={election_category}&flt_phase={phase}",
         status_code=303,
     )
+
+from src.calc.calc import do_calc
 
 @router.post("/config/calc")
 async def calc(
