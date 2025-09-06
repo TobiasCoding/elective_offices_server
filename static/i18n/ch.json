@@ -1,0 +1,70 @@
+{
+  "app.processed_results": "处理结果",
+  "filters.year": "年份",
+  "filters.phase": "阶段",
+  "filters.data": "数据",
+  "filters.all": "全部",
+  "table.category": "类别",
+  "table.office": "职位",
+  "table.method": "方法",
+  "table.last_calc": "上次计算",
+  "btn.show_calc.title": "查看该行的计算",
+  "calc.loading": "正在加载计算…",
+  "calc.error": "加载时发生错误。",
+  "calc.others": "其他",
+  "meta.district": "选区",
+  "meta.counted_tables": "已统计的投票站",
+  "meta.participation": "参与率",
+  "meta.source": "来源",
+  "meta.source.api": "官方 API",
+  "thead.hash": "#",
+  "thead.group": "阵营",
+  "thead.votes": "票数",
+  "thead.percent": "%",
+  "thead.seats": "席位",
+  "table": {
+    "rank": "#",
+    "group": "阵营",
+    "votes": "票数",
+    "pct": "%",
+    "seats": "席位"
+  },
+  "meta": {
+    "district": "选区",
+    "counted": "已统计",
+    "counted_suffix": "个投票站",
+    "participation": "参与率",
+    "source": "来源",
+    "official_api": "官方 API"
+  },
+  "method": {
+    "dhondt": "D'Hondt",
+    "lista_incompleta": "不完整名单",
+    "mayoria_simple": "简单多数",
+    "balotaje_top2": "决选 • 前二",
+    "unsupported": "不支持的方法"
+  },
+  "nav": { "home": "首页", "settings": "设置" },
+  "btn": {
+    "rename": "重命名",
+    "delete": "删除",
+    "cancel": "取消",
+    "create": "创建",
+    "danger": "危险",
+    "replace_excel": "更换工作表"
+  },
+  "other": {
+    "title": "其他",
+    "type": "类型",
+    "votes": "票数",
+    "pct": "%",
+    "positive_total": "有效票",
+    "types": {
+      "blank": "空白票",
+      "null": "废票",
+      "contested": "质疑票",
+      "appealed": "上诉票",
+      "command": "指挥票"
+    }
+  }
+}

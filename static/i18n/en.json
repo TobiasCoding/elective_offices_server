@@ -1,0 +1,70 @@
+{
+  "app.processed_results": "Processed results",
+  "filters.year": "Year",
+  "filters.phase": "Phase",
+  "filters.data": "Data",
+  "filters.all": "All",
+  "table.category": "Category",
+  "table.office": "Office",
+  "table.method": "Method",
+  "table.last_calc": "Last calculation",
+  "btn.show_calc.title": "Show calculation for this row",
+  "calc.loading": "Loading calculation…",
+  "calc.error": "An error occurred while loading.",
+  "calc.others": "Others",
+  "meta.district": "District",
+  "meta.counted_tables": "Counted tables",
+  "meta.participation": "Participation",
+  "meta.source": "Source",
+  "meta.source.api": "Official API",
+  "thead.hash": "#",
+  "thead.group": "Group",
+  "thead.votes": "Votes",
+  "thead.percent": "%",
+  "thead.seats": "Seats",
+  "table": {
+    "rank": "#",
+    "group": "Group",
+    "votes": "Votes",
+    "pct": "%",
+    "seats": "Seats"
+  },
+  "meta": {
+    "district": "District",
+    "counted": "Counted",
+    "counted_suffix": "tables",
+    "participation": "Participation",
+    "source": "Source",
+    "official_api": "Official API"
+  },
+  "method": {
+    "dhondt": "D'Hondt",
+    "lista_incompleta": "Incomplete list",
+    "mayoria_simple": "Simple majority",
+    "balotaje_top2": "Runoff • Top 2",
+    "unsupported": "Unsupported method"
+  },
+  "nav": { "home": "Home", "settings": "Settings" },
+  "btn": {
+    "rename": "Rename",
+    "delete": "Delete",
+    "cancel": "Cancel",
+    "create": "Create",
+    "danger": "Danger",
+    "replace_excel": "Replace Excel"
+  },
+  "other": {
+    "title": "Others",
+    "type": "Type",
+    "votes": "Votes",
+    "pct": "%",
+    "positive_total": "VALID VOTES",
+    "types": {
+      "blank": "BLANK",
+      "null": "NULL",
+      "contested": "CONTESTED",
+      "appealed": "APPEALED",
+      "command": "COMMAND"
+    }
+  }
+}

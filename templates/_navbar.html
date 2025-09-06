@@ -1,0 +1,28 @@
+<!-- templates/_navbar.html -->
+<nav class="topbar" role="navigation" aria-label="Main">
+    <div class="topbar__left">
+        <a class="topbar__brand" href="/elective_office/">Elective Office</a>
+        <span class="badge">APE - JF1 La Plata</span>
+    </div>
+
+    <div class="topbar__right">
+        <!-- Idioma -->
+        <label class="ctrl ctrl--inline" for="lang-select">
+            <select id="lang-select" class="ctrl__select" aria-label="Language">
+                <!-- Podés agregar más idiomas simplemente sumando opciones -->
+                <option value="es" selected>ES</option>
+                <option value="en">EN</option>
+                <option value="fr">FR</option>
+                <option value="pt">PT</option>
+                <option value="ch">CH</option>
+            </select>
+        </label>
+
+        <!-- Tema -->
+        <button id="theme-toggle" class="btn btn--ghost" type="button" aria-pressed="false" aria-label="Cambiar tema">
+            <span class="theme-icon" data-light="☀️" data-dark="🌙">☀️</span>
+        </button>
+        <a class="btn" href="/elective_office/" data-i18n="nav.home">Home</a>
+        <a class="btn" href="/elective_office/config" data-i18n="nav.settings">Settings</a>
+    </div>
+</nav>

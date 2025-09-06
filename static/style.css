@@ -1,0 +1,699 @@
+/* static/style.css
+ * Unificación de temas (Light/Dark) con CSS variables.
+ * Por defecto: Light sobre :root. Dark aplica con .theme-dark en <html>.
+ */
+
+/* =================== THEME TOKENS =================== */
+:root {
+    --bg: #0b0c10;
+    --fg: #e6edf3;
+    --panel: #111217;
+    --line: #2a2f3a;
+    --muted: #9aa7bd;
+    --accent: #1b873f;
+    --warn: #a66b00;
+    --danger: #a5484a;
+    --overlay: rgba(0, 0, 0, .35);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+}
+
+body {
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif;
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+}
+
+header,
+footer {
+    padding: 12px 16px;
+    background: var(--panel);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+main {
+    padding: 16px;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+a {
+    color: #7dcfff;
+    text-decoration: none;
+}
+
+h2,
+h3,
+h4 {
+    margin: 8px 0 12px;
+}
+
+small.mono {
+    color: var(--muted);
+}
+
+.row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.col {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.grid {
+    display: grid;
+    gap: 16px;
+}
+
+.grid.two {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+}
+
+.card {
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 14px;
+    background: #0f1117;
+}
+
+.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+input,
+select,
+textarea {
+    background: #0f1117;
+    color: var(--fg);
+    border: 1px solid var(--line);
+    padding: 8px 10px;
+    border-radius: 8px;
+    width: 100%;
+}
+
+label {
+    display: block;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 10px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: #0f1117;
+    color: var(--fg);
+    cursor: pointer;
+}
+
+.btn:hover {
+    background: #121522;
+}
+
+.btn.ok {
+    border-color: var(--accent);
+    color: #b7ffce;
+}
+
+.btn.warn {
+    border-color: var(--warn);
+    color: #ffd18a;
+}
+
+.btn.danger {
+    border-color: var(--danger);
+    color: #ffb3b5;
+}
+
+.badge {
+    padding: 2px 6px;
+    border-radius: 6px;
+    border: 1px solid var(--line);
+    font-size: 12px;
+}
+
+.muted {
+    color: var(--muted);
+}
+
+.twrap {
+    overflow: auto;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+th,
+td {
+    border: 1px solid var(--line);
+    padding: 10px;
+    vertical-align: top;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+th {
+    background: #171a22;
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
+.actions .btn {
+    padding: 6px 8px;
+}
+
+/* Chips de selección */
+.chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.chip {
+    border: 1px solid var(--line);
+    padding: 6px 10px;
+    border-radius: 999px;
+    cursor: pointer;
+    user-select: none;
+}
+
+.chip:hover {
+    background: #121522;
+}
+
+.chip.sel {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent) inset;
+}
+
+/* Modal */
+.modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, .55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+}
+
+.modal {
+    background: var(--panel-bg);
+    color: var(--text);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 16px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .25);
+}
+
+.modal header {
+    position: unset;
+    background: transparent;
+    padding: 0;
+}
+
+.modal .close {
+    margin-left: auto;
+}
+
+:root {
+    /* Base */
+    --bg: #ffffff;
+    --bg-elev: #f7f7f9;
+    --text: #151515;
+    --muted: #666;
+    --border: #d7d7dd;
+
+    /* Links / Accents */
+    --link: #1a5fff;
+    --link-hover: #174fe0;
+
+    /* Chips/Buttons */
+    --chip-bg: #f0f0f3;
+    --chip-border: #b9b9c6;
+    --chip-active-border: #4d68ff;
+    --chip-active-shadow: rgba(77, 104, 255, 0.18);
+
+    --btn-bg: #f2f3f7;
+    --btn-bg-strong: #e7e9f3;
+    --btn-border: #c7c9d6;
+
+    /* Calc panel / tables */
+    --panel-bg: #ffffff;
+    --panel-border: #e6e6ee;
+
+    /* Status */
+    --danger: #d64040;
+
+    /* Tables */
+    --row-border: #e3e3ea;
+
+    /* Focus ring */
+    --focus: 0 0 0 2px rgba(77, 104, 255, 0.25) inset;
+
+    /* Headers */
+    --thead-bg: #000;
+    --thead-fg: #fff;
+}
+
+/* =================== CARDS =================== */
+.card {
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 12px;
+    padding: 14px;
+}
+
+/* =================== FILE INPUT (BTN STYLE) =================== */
+input[type="file"] {
+    appearance: none;
+    /* resetea el estilo nativo */
+    -webkit-appearance: none;
+    /* Safari */
+    -moz-appearance: none;
+    /* Firefox */
+    cursor: pointer;
+    padding: 6px 12px;
+    border: 1px solid var(--btn-border);
+    border-radius: 8px;
+    background: var(--btn-bg);
+    color: var(--text);
+    font: inherit;
+}
+
+input[type="file"]:hover {
+    filter: brightness(1.05);
+}
+
+input[type="file"]:focus {
+    outline: none;
+    box-shadow: var(--focus);
+}
+
+html.theme-dark {
+    --bg: #0f0f12;
+    --bg-elev: #17171c;
+    --text: #e9e9ee;
+    --muted: #b7b7c6;
+    --border: #2d2d36;
+
+    --link: #aaccff;
+    --link-hover: #c3d7ff;
+
+    --chip-bg: #2b2b33;
+    --chip-border: #444659;
+    --chip-active-border: #7171ff;
+    --chip-active-shadow: rgba(160, 160, 255, 0.15);
+
+    --btn-bg: #3b3b3b;
+    --btn-bg-strong: #4e4e4e;
+    --btn-border: #7a7a8a;
+
+    --panel-bg: #1f1f1f;
+    --panel-border: #33333d;
+
+    --danger: #ff9b9b;
+
+    --row-border: #2e2e36;
+
+    --thead-bg: var(--bg-elev);
+    --thead-fg: #fff;
+
+    --overlay: rgba(0, 0, 0, .6);
+}
+
+/* Base layout */
+html,
+body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+    line-height: 1.45;
+}
+
+/* =================== TOP BAR =================== */
+.topbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: var(--bg-elev);
+    border-bottom: 1px solid var(--border);
+}
+
+.topbar__brand {
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 700;
+    letter-spacing: .2px;
+}
+
+.topbar__right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+/* Controls */
+.ctrl {
+    display: grid;
+    gap: 4px;
+}
+
+.ctrl--inline {
+    grid-auto-flow: column;
+    align-items: center;
+    gap: 8px;
+}
+
+.ctrl__label {
+    font-size: .9rem;
+    color: var(--muted);
+}
+
+.ctrl__select {
+    min-width: 140px;
+    padding: 6px 8px;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.ctrl__select:focus {
+    outline: none;
+    box-shadow: var(--focus);
+}
+
+.btn {
+    cursor: pointer;
+    padding: 6px 10px;
+    border: 1px solid var(--btn-border);
+    border-radius: 8px;
+    background: var(--btn-bg);
+    color: var(--text);
+}
+
+.btn.primary {
+    background: var(--btn-bg-strong);
+}
+
+.btn.is-loading {
+    opacity: .7;
+    pointer-events: none;
+}
+
+.btn--ghost {
+    background: transparent;
+}
+
+/* =================== BUTTON VARIANTS =================== */
+.btn.warn {
+    background: #ffecb3;
+    /* amarillo claro */
+    border-color: #f0c14b;
+    color: #5a3d00;
+}
+
+.btn.warn:hover {
+    background: #ffe082;
+    filter: brightness(1.05);
+}
+
+.btn.danger {
+    background: #ffcdd2;
+    /* rojo claro */
+    border-color: #e57373;
+    color: #7f1c1c;
+}
+
+.btn.danger:hover {
+    background: #ef9a9a;
+    filter: brightness(1.05);
+}
+
+.btn.ok {
+    background: #c8e6c9;
+    /* verde claro */
+    border-color: #81c784;
+    color: #1b5e20;
+}
+
+.btn.ok:hover {
+    background: #a5d6a7;
+    filter: brightness(1.05);
+}
+
+/* =================== TABLE HEADERS =================== */
+#results-table thead th {
+    background: var(--thead-bg) !important;
+    color: var(--thead-fg) !important;
+    transition: none !important;
+    font-weight: 600;
+    text-align: left;
+}
+
+
+.theme-icon {
+    margin-right: 6px;
+}
+
+/* Links */
+a {
+    color: var(--link);
+}
+
+a:hover {
+    color: var(--link-hover);
+}
+
+/* =================== FILTER BAR =================== */
+#filters-bar {
+    display: grid;
+    gap: 8px;
+    margin: 10px 0 16px;
+}
+
+@media (min-width: 720px) {
+    #filters-bar {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+.filter-group {
+    display: grid;
+    gap: 6px;
+}
+
+.filter-label {
+    font-weight: 600;
+    opacity: .9;
+}
+
+.filter-scroll {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding: 4px 2px;
+    scrollbar-width: thin;
+}
+
+.chip {
+    white-space: nowrap;
+    border: 1px solid var(--chip-border);
+    background: var(--chip-bg);
+    border-radius: 999px;
+    padding: 6px 10px;
+    cursor: pointer;
+    font-size: .92rem;
+    color: var(--text);
+}
+
+.chip:hover {
+    filter: brightness(1.05);
+}
+
+.chip.active {
+    border-color: var(--chip-active-border);
+    box-shadow: var(--focus);
+}
+
+.chip-all {
+    opacity: .9;
+}
+
+/* =================== TABLE & BUTTONS =================== */
+#results-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+#results-table th,
+#results-table td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--row-border);
+    vertical-align: top;
+}
+
+td.right,
+th.actions {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.link-like {
+    background: none;
+    border: none;
+    color: var(--link);
+    cursor: pointer;
+    padding: 0;
+}
+
+.link-like:hover {
+    text-decoration: underline;
+}
+
+/* =================== CALC PANEL =================== */
+.calc-panel {
+    padding: 10px 8px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+}
+
+.calc-panel table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 8px;
+}
+
+.calc-panel th,
+.calc-panel td {
+    border-bottom: 1px solid var(--row-border);
+    padding: 6px 8px;
+}
+
+.calc-loading {
+    opacity: .85;
+}
+
+.calc-error {
+    color: var(--danger);
+}
+
+.mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+.mini-table .total td {
+    border-top: 2px solid var(--row-border);
+}
+
+.spinner {
+    display: none;
+    /* visible solo mientras se envía */
+    width: 14px;
+    height: 14px;
+    margin-left: 8px;
+    vertical-align: middle;
+    border: 2px solid var(--border);
+    /* borde gris */
+    border-top-color: var(--bg);
+    /* “sector” blanco */
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.btn.is-loading {
+    opacity: .7;
+    pointer-events: none;
+}
+
+
+.modal>header {
+    border-bottom: 1px solid var(--panel-border);
+    margin: -4px -4px 12px;
+    padding: 4px 4px 12px;
+}
+
+.modal h3 {
+    margin: 0;
+    color: var(--text);
+}
+
+
+/* Botón cerrar */
+.btn.close {
+    background: transparent;
+    color: var(--text);
+    border: 1px solid var(--btn-border);
+    border-radius: 8px;
+    padding: 4px 8px;
+}
+
+.btn.close:hover {
+    filter: brightness(1.05);
+}
+
+/* Inputs dentro del modal */
+.modal input[type="number"],
+.modal input[type="text"],
+.modal input[type="email"],
+.modal input[type="password"] {
+    width: 100%;
+    padding: 6px 10px;
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+}
+
+.modal input:focus {
+    outline: none;
+    box-shadow: var(--focus);
+}
+
+/* Footer de acciones */
+.modal .row .btn {
+    border-color: var(--btn-border);
+    background: var(--btn-bg);
+    color: var(--text);
+}
+
+.modal .row .btn:hover {
+    filter: brightness(1.05);
+}

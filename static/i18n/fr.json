@@ -1,0 +1,70 @@
+{
+  "app.processed_results": "Résultats traités",
+  "filters.year": "Année",
+  "filters.phase": "Phase",
+  "filters.data": "Données",
+  "filters.all": "Tous",
+  "table.category": "Catégorie",
+  "table.office": "Fonction",
+  "table.method": "Méthode",
+  "table.last_calc": "Dernier calcul",
+  "btn.show_calc.title": "Afficher le calcul pour cette ligne",
+  "calc.loading": "Chargement du calcul…",
+  "calc.error": "Une erreur est survenue lors du chargement.",
+  "calc.others": "Autres",
+  "meta.district": "District",
+  "meta.counted_tables": "Bureaux dépouillés",
+  "meta.participation": "Participation",
+  "meta.source": "Source",
+  "meta.source.api": "API officielle",
+  "thead.hash": "#",
+  "thead.group": "Groupe",
+  "thead.votes": "Voix",
+  "thead.percent": "%",
+  "thead.seats": "Sièges",
+  "table": {
+    "rank": "#",
+    "group": "Groupe",
+    "votes": "Voix",
+    "pct": "%",
+    "seats": "Sièges"
+  },
+  "meta": {
+    "district": "District",
+    "counted": "Dépouillé",
+    "counted_suffix": "bureaux",
+    "participation": "Participation",
+    "source": "Source",
+    "official_api": "API officielle"
+  },
+  "method": {
+    "dhondt": "D'Hondt",
+    "lista_incompleta": "Liste incomplète",
+    "mayoria_simple": "Majorité simple",
+    "balotaje_top2": "Ballottage • Top 2",
+    "unsupported": "Méthode non prise en charge"
+  },
+  "nav": { "home": "Accueil", "settings": "Paramètres" },
+  "btn": {
+    "rename": "Renommer",
+    "delete": "Supprimer",
+    "create": "Créer",
+    "cancel": "Annuler",
+    "danger": "Dangereux",
+    "replace_excel": "Remplacer Excel"
+  },
+  "other": {
+    "title": "Autres",
+    "type": "Type",
+    "votes": "Voix",
+    "pct": "%",
+    "positive_total": "SUFFRAGES VALIDES",
+    "types": {
+      "blank": "BLANC",
+      "null": "NUL",
+      "contested": "CONTESTÉ",
+      "appealed": "EN APPEL",
+      "command": "COMMANDE"
+    }
+  }
+}

@@ -7,13 +7,13 @@
     <section class="col card">
         <div class="row" style="justify-content:space-between; align-items:flex-end; gap:12px;">
             {% set has_year = flt_year and (flt_year in years) %}
-            <h3>1) Year</h3>
+            <h3>1) <span data-i18n="filters.year">Year</span></h3>
             <div class="row" style="gap:8px; align-items:center;">
                 {% if has_year %}
-                <button type="button" class="btn warn" id="btnYearRename" data-year="{{ flt_year }}">Rename</button>
-                <button type="button" class="btn danger" id="btnYearDelete" data-year="{{ flt_year }}">Delete</button>
+                <button type="button" class="btn warn" id="btnYearRename" data-year="2023" data-i18n="btn.rename">Rename</button>
+                <button type="button" class="btn danger" id="btnYearDelete" data-year="2023" data-i18n="btn.delete">Delete</button>
                 {% endif %}
-                <button type="button" class="btn ok" id="btnYearCreate">Create</button>
+                <button type="button" class="btn ok" id="btnYearCreate" data-i18n="btn.create">Create</button>
             </div>
         </div>
 
@@ -35,66 +35,8 @@
             <input type="hidden" name="year" id="delYearField" />
             <button type="submit">submit</button>
         </form>
-        <script>
-            (function () {
-                const $ren = document.getElementById('btnYearRename');
-                const $del = document.getElementById('btnYearDelete');
-                if ($ren) {
-                    $ren.addEventListener('click', () => {
-                        const oldYear = $ren.dataset.year;
-                        const proposed = prompt(`Nuevo valor para el año ${oldYear}:`, oldYear);
-                        if (!proposed) return;
-                        const trimmed = proposed.trim();
-                        if (!/^\d{4}$/.test(trimmed)) {
-                            alert('El año debe tener 4 dígitos.');
-                            return;
-                        }
-                        document.getElementById('oldYearField').value = oldYear;
-                        document.getElementById('newYearField').value = trimmed;
-                        document.getElementById('frmRenameYear').submit();
-                    });
-                }
-                if ($del) {
-                    $del.addEventListener('click', () => {
-                        const year = $del.dataset.year;
-                        if (!confirm(`¿Eliminar el año ${year}? Se perderá toda su configuración.`)) return;
-                        document.getElementById('delYearField').value = year;
-                        document.getElementById('frmDeleteYear').submit();
-                    });
-                }
-            })();
-        </script>
-<style>
-    .spinner {
-        display: none;
-        /* visible solo mientras se envía */
-        width: 14px;
-        height: 14px;
-        margin-left: 8px;
-        vertical-align: middle;
-        border: 2px solid #bbb;
-        /* borde gris */
-        border-top-color: #fff;
-        /* “sector” blanco */
-        border-radius: 50%;
-        animation: spin 0.9s linear infinite;
-    }
-
-    @keyframes spin {
-        to {
-            transform: rotate(360deg);
-        }
-    }
-
-    .btn.is-loading {
-        opacity: .7;
-        pointer-events: none;
-    }
-</style>
-
 
     </section>
-
     {# helpers de existencia #}
     {% set categories_for_year = (attached_categories
         | selectattr('year','equalto', flt_year)
@@ -116,7 +58,7 @@
 {% if has_year %}
 <section class="col card">
     <div class="row" style="justify-content:space-between; align-items:flex-end; gap:12px;">
-        <h3>2) Category and offices</h3>
+        <h3>2) <span data-i18n="table.category">Category and offices</span></h3>
     </div>
 {% set CATEGORY_CHOICES = ['Nacional','Provincial'] %}
 {% set existing_categories = categories_for_year %}
@@ -161,7 +103,7 @@ attached_categories
         <label style="margin:0;">Offices (xlsx/xls)
             <input type="file" name="seats_excel" accept=".xlsx,.xls" required />
         </label>
-        <button class="btn ok" type="submit">Replace Excel</button>
+        <button class="btn" type="button" id="btnReplaceExcel" data-i18n="btn.replace_excel">Replace Excel</button>
     </form>
 
     <!-- Delete categoría -->
@@ -170,7 +112,7 @@ attached_categories
         style="align-items:center;">
         <input type="hidden" name="year" value="{{ flt_year }}">
         <input type="hidden" name="election_category" value="{{ flt_category }}">
-        <button class="btn danger" type="submit">Delete</button>
+        <button class="btn danger" type="button" id="btnDeleteExcel" data-i18n="btn.delete">Delete</button>
     </form>
 </div>
 {% else %}
@@ -182,7 +124,7 @@ attached_categories
     <label style="margin:0;">Offices (xlsx/xls)
         <input type="file" name="seats_excel" accept=".xlsx,.xls" required />
     </label>
-    <button class="btn ok" type="submit">Create</button>
+    <button class="btn ok" type="submit" id="btnYearCreate">Create</button>
 </form>
 {% endif %}
 
@@ -192,13 +134,12 @@ attached_categories
 </section>
 {% endif %}
 
-
     <!-- 3) Fase — visible si hay año y categoría válida seleccionados -->
     {% if has_category_for_ctx %}
     {% set PHASE_CHOICES = ['PASO','GENERAL','BALOTAJE'] %}
     <section class="col card">
         <div class="row" style="justify-content:space-between; align-items:flex-end;">
-            <h3>3) Phase</h3>
+            <h3>3) <span data-i18n="filters.phase">Phase</span></h3>
         </div>
 
         <!-- Chips de fases (muestran existencia) -->
@@ -230,7 +171,7 @@ attached_categories
                 <input type="hidden" name="year" value="{{ flt_year }}">
                 <input type="hidden" name="election_category" value="{{ flt_category }}">
                 <input type="hidden" name="phase" value="{{ flt_phase }}">
-                <button class="btn danger" type="submit">Delete</button>
+                <button class="btn danger" type="submit" data-i18n="btn.delete">Delete</button>
             </form>
             {% else %}
             <!-- Crear cuando la fase NO existe -->
@@ -249,18 +190,18 @@ attached_categories
     <!-- 4) CRUD URLs — visible si hay fase válida seleccionada -->
     {% if has_phase_for_ctx %}
     <section class="col card">
-        <h3>4) Data sources</h3>
+        <h3>4) <span data-i18n="filters.data">Data</span></h3>
         <div class="twrap" style="margin-top:12px;">
-            <table>
+            <table id="results-table">
                 <thead>
                     <tr>
-                        <th style="width:8ch;">Year</th>
-                        <th style="width:12ch;">Category</th>
-                        <th style="width:12ch;">Phase</th>
-                        <th style="width:22ch;">Office</th>
-                        <th style="width:16ch;">Method</th>
-                        <th>URL</th>
-                        <th style="width:26ch;">Actions</th>
+                        <th style="width:8ch;" data-i18n="filters.year">Year</th>
+                        <th style="width:12ch;" data-i18n="table.category">Category</th>
+                        <th style="width:12ch;" data-i18n="filters.phase">Phase</th>
+                        <th style="width:22ch;" data-i18n="table.office">Office</th>
+                        <th style="width:16ch;" data-i18n="table.method">Method</th>
+                        <!-- <th>URL</th> -->
+                        <!-- <th style="width:26ch;">Actions</th> -->
                     </tr>
                 </thead>
                 <tbody>
@@ -272,42 +213,6 @@ attached_categories
                         <td>{{ it.phase }}</td>
                         <td>{{ it.office }}</td>
                         <td>{{ it.method }}</td>
-                        <td class="mono" title="{{ it.url or '-' }}">{{ it.url or '-' }}</td>
-                        <td class="actions">
-                            <div class="row" style="flex-wrap:wrap;">
-                                <button class="btn ok" type="button" data-open-url-modal data-year="{{ it.year }}"
-                                    data-category="{{ it.category }}" data-phase="{{ it.phase }}"
-                                    data-office="{{ it.office }}" data-url="{{ it.url or '' }}">Edit</button>
-
-                                <form method="post" action="/elective_office/config/parse">
-                                    <input type="hidden" name="year" value="{{ it.year }}">
-                                    <input type="hidden" name="election_category" value="{{ it.category }}">
-                                    <input type="hidden" name="phase" value="{{ it.phase }}">
-                                    <input type="hidden" name="office" value="{{ it.office }}">
-                                    <button class="btn" type="submit">Parse</button>
-                                    <span class="spinner" aria-hidden="true" title="Processing"></span>
-                                </form>
-
-                                <form method="post" action="/elective_office/config/preprocess">
-                                    <input type="hidden" name="year" value="{{ it.year }}">
-                                    <input type="hidden" name="election_category" value="{{ it.category }}">
-                                    <input type="hidden" name="phase" value="{{ it.phase }}">
-                                    <input type="hidden" name="office" value="{{ it.office }}">
-                                    <button class="btn" type="submit">Preprocess</button>
-                                    <span class="spinner" aria-hidden="true" title="Processing"></span>
-                                </form>
-
-                                <form method="post" action="/elective_office/config/calc">
-                                    <input type="hidden" name="year" value="{{ it.year }}">
-                                    <input type="hidden" name="election_category" value="{{ it.category }}">
-                                    <input type="hidden" name="phase" value="{{ it.phase }}">
-                                    <input type="hidden" name="office" value="{{ it.office }}">
-                                    <button class="btn warn" type="submit">Calc</button>
-                                    <span class="spinner" aria-hidden="true" title="Processing"></span>
-                                </form>
-
-                            </div>
-                        </td>
                     </tr>
                     {% else %}
                     <tr>
@@ -318,7 +223,6 @@ attached_categories
                 </tbody>
             </table>
         </div>
-
     </section>
     {% endif %}
 </div>
@@ -333,17 +237,17 @@ attached_categories
         <form class="col" method="post" action="/elective_office/config/upsert_url" id="urlForm"
             style="margin-top:10px;">
             <div class="grid two">
-                <label>Year <input name="year" id="urlYear" readonly /></label>
-                <label>Category <input name="election_category" id="urlCategory" readonly /></label>
+                <label><span data-i18n="filters.year">Year</span> <input name="year" id="urlYear" readonly /></label>
+                <label><span data-i18n="table.category">Category</span> <input name="election_category" id="urlCategory" readonly /></label>
             </div>
             <div class="grid two">
-                <label>Phase <input name="phase" id="urlPhase" readonly /></label>
-                <label>Office <input name="office" id="urlOffice" readonly /></label>
+                <label><span data-i18n="filters.phase">Phase</span> <input name="phase" id="urlPhase" readonly /></label>
+                <label><span data-i18n="table.office">Office</span> <input name="office" id="urlOffice" readonly /></label>
             </div>
             <label>URL API CSV <input name="url" id="urlValue" placeholder="http://..." /></label>
             <div class="row" style="justify-content:flex-end; gap:10px;">
-                <button class="btn" type="button" id="urlModalCancel">Cancel</button>
-                <button class="btn ok" type="submit">Save</button>
+                <button class="btn" type="button" id="urlModalCancel" data-i18n="btn.cancel">Cancel</button>
+                <button class="btn ok" type="submit" data-i18n="btn.save">Save</button>
             </div>
         </form>
     </div>
@@ -359,8 +263,8 @@ attached_categories
         <form class="col" method="post" action="/elective_office/config/rename_phase" id="phaseForm"
             style="margin-top:10px;">
             <div class="grid two">
-                <label>Year <input name="year" id="phYear" readonly /></label>
-                <label>Category <input name="election_category" id="phCategory" readonly /></label>
+                <label><span data-i18n="filters.year">Year</span> <input name="year" id="phYear" readonly /></label>
+                <label><span data-i18n="table.category">Category</span> <input name="election_category" id="phCategory" readonly /></label>
             </div>
             <div class="grid two">
                 <label>Fase actual <input name="phase_old" id="phOld" readonly /></label>
@@ -373,8 +277,8 @@ attached_categories
                 </label>
             </div>
             <div class="row" style="justify-content:flex-end; gap:10px;">
-                <button class="btn" type="button" id="phaseModalCancel">Cancel</button>
-                <button class="btn ok" type="submit">Save</button>
+                <button class="btn" type="button" id="phaseModalCancel" data-i18n="btn.cancel">Cancel</button>
+                <button class="btn ok" type="submit" data-i18n="btn.save">Save</button>
             </div>
         </form>
     </div>
@@ -389,20 +293,47 @@ attached_categories
         </header>
         <form class="col" method="post" action="/elective_office/config/create_year" id="yearForm"
             style="margin-top:10px;">
-            <label>Year
+            <label><span data-i18n="filters.year">Year</span>
                 <input id="yearInput" type="number" name="year" required min="1900" />
             </label>
             <div class="row" style="justify-content:flex-end; gap:10px;">
-                <button class="btn" type="button" id="yearModalCancel">Cancel</button>
-                <button class="btn ok" type="submit">Crear</button>
+                <button class="btn" type="button" id="yearModalCancel" data-i18n="btn.cancel">Cancel</button>
+                <button class="btn ok" type="submit" data-i18n="btn.create">Create</button>
             </div>
         </form>
     </div>
 </div>
 
 <script>
+
     // Navegación por chips: setea query params y recarga.
     (function () {
+        const $ren = document.getElementById('btnYearRename');
+        const $del = document.getElementById('btnYearDelete');
+        if ($ren) {
+            $ren.addEventListener('click', () => {
+                const oldYear = $ren.dataset.year;
+                const proposed = prompt(`Nuevo valor para el año ${oldYear}:`, oldYear);
+                if (!proposed) return;
+                const trimmed = proposed.trim();
+                if (!/^\d{4}$/.test(trimmed)) {
+                    alert('El año debe tener 4 dígitos.');
+                    return;
+                }
+                document.getElementById('oldYearField').value = oldYear;
+                document.getElementById('newYearField').value = trimmed;
+                document.getElementById('frmRenameYear').submit();
+            });
+        }
+        if ($del) {
+            $del.addEventListener('click', () => {
+                const year = $del.dataset.year;
+                if (!confirm(`¿Eliminar el año ${year}? Se perderá toda su configuración.`)) return;
+                document.getElementById('delYearField').value = year;
+                document.getElementById('frmDeleteYear').submit();
+            });
+        }
+
         function setParam(url, key, value) {
             const u = new URL(url, window.location.origin);
             if (value === null || value === "") u.searchParams.delete(key);

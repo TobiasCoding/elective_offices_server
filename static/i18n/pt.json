@@ -1,0 +1,70 @@
+{
+  "app.processed_results": "Resultados processados",
+  "filters.year": "Ano",
+  "filters.phase": "Fase",
+  "filters.data": "Dados",
+  "filters.all": "Todos",
+  "table.category": "Categoria",
+  "table.office": "Cargo",
+  "table.method": "Método",
+  "table.last_calc": "Último cálculo",
+  "btn.show_calc.title": "Ver cálculo para esta linha",
+  "calc.loading": "Carregando cálculo…",
+  "calc.error": "Ocorreu um erro ao carregar.",
+  "calc.others": "Outros",
+  "meta.district": "Distrito",
+  "meta.counted_tables": "Mesas apuradas",
+  "meta.participation": "Participação",
+  "meta.source": "Fonte",
+  "meta.source.api": "API oficial",
+  "thead.hash": "#",
+  "thead.group": "Agrupação",
+  "thead.votes": "Votos",
+  "thead.percent": "%",
+  "thead.seats": "Cadeiras",
+  "table": {
+    "rank": "#",
+    "group": "Agrupação",
+    "votes": "Votos",
+    "pct": "%",
+    "seats": "Cadeiras"
+  },
+  "meta": {
+    "district": "Distrito",
+    "counted": "Apurado",
+    "counted_suffix": "mesas",
+    "participation": "Participação",
+    "source": "Fonte",
+    "official_api": "API oficial"
+  },
+  "method": {
+    "dhondt": "D'Hondt",
+    "lista_incompleta": "Lista incompleta",
+    "mayoria_simple": "Maioria simples",
+    "balotaje_top2": "Segundo turno • Top 2",
+    "unsupported": "Método não suportado"
+  },
+  "nav": { "home": "Início", "settings": "Configurações" },
+  "btn": {
+    "rename": "Renomear",
+    "delete": "Excluir",
+    "create": "Criar",
+    "cancel": "Cancelar",
+    "danger": "Perigoso",
+    "replace_excel": "Substituir Excel"
+  },
+  "other": {
+    "title": "Outros",
+    "type": "Tipo",
+    "votes": "Votos",
+    "pct": "%",
+    "positive_total": "VÁLIDOS",
+    "types": {
+      "blank": "EM BRANCO",
+      "null": "NULO",
+      "contested": "IMPUGNADO",
+      "appealed": "RECORRIDO",
+      "command": "COMANDO"
+    }
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "app.processed_results": "Resultados procesados",
+  "filters.year": "Año",
+  "filters.phase": "Fase",
+  "filters.data": "Datos",
+  "filters.all": "Todos",
+  "table.category": "Categoría",
+  "table.office": "Cargo",
+  "table.method": "Método",
+  "table.last_calc": "Último cálculo",
+  "btn.show_calc.title": "Ver cálculo para esta fila",
+  "calc.loading": "Cargando cálculo…",
+  "calc.error": "Ocurrió un error al cargar.",
+  "calc.others": "Otros",
+  "meta.district": "Distrito",
+  "meta.counted_tables": "Mesas escrutadas",
+  "meta.participation": "Participación",
+  "meta.source": "Fuente",
+  "meta.source.api": "API oficial",
+  "thead.hash": "#",
+  "thead.group": "Agrupación",
+  "thead.votes": "Votos",
+  "thead.percent": "%",
+  "thead.seats": "Bancas",
+  "table": {
+    "rank": "#",
+    "group": "Agrupación",
+    "votes": "Votos",
+    "pct": "%",
+    "seats": "Bancas"
+  },
+  "meta": {
+    "district": "Distrito",
+    "counted": "Escrutado",
+    "counted_suffix": "mesas",
+    "participation": "Participación",
+    "source": "Fuente",
+    "official_api": "API oficial"
+  },
+  "method": {
+    "dhondt": "D'Hondt",
+    "lista_incompleta": "Lista incompleta",
+    "mayoria_simple": "Mayoría simple",
+    "balotaje_top2": "Balotaje • Top 2",
+    "unsupported": "Método no soportado"
+  },
+  "nav": { "home": "Inicio", "settings": "Configuración" },
+  "btn": {
+    "rename": "Renombrar",
+    "delete": "Eliminar",
+    "create": "Crear",
+    "cancel": "Cancelar",
+    "danger": "Peligroso",
+    "replace_excel": "Reemplazar Excel"
+  },
+  "other": {
+    "title": "Otros",
+    "type": "Tipo",
+    "votes": "Votos",
+    "pct": "%",
+    "positive_total": "POSITIVOS",
+    "types": {
+      "blank": "EN BLANCO",
+      "null": "NULO",
+      "contested": "IMPUGNADO",
+      "appealed": "RECURRIDO",
+      "command": "COMANDO"
+    }
+  }
+}
+

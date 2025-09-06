@@ -20,11 +20,89 @@ from config.config import *
 
 # ================= App =================
 app = FastAPI(title="Elective Office")
-app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+
+app.mount("/elective_office/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 router = APIRouter(prefix="/elective_office")
 
 # ================= Utils =================
+@app.get("/favicon.ico")
+async def favicon():
+    return RedirectResponse("/static/favicon.ico")
+
+
+# --- NUEVO: Normalización simple de nombres para mapear cargos ---
+def _norm_office_name(s: str) -> str:
+    if not isinstance(s, str):
+        return ""
+    s = s.lower().strip()
+    repl = {"á":"a","é":"e","í":"i","ó":"o","ú":"u","ü":"u","ñ":"n"}
+    for k,v in repl.items(): s = s.replace(k, v)
+    return " ".join(s.split())
+
+# --- NUEVO: mapa office -> idCargo (según estándar provisto) ---
+# 1=presidente, 2=senadores, 3=diputados, 4=gobernador,
+# 5=senadores nacionales, 6=diputados provinciales, 7=intendente,
+# 8=parlamentario mercosur nacional, 9=parlamentario mercosur regional
+_OFFICE_TO_IDCARGO: dict[str,int] = {
+    # Nacional
+    "presidente y vicepresidente": 1,
+    "presidente": 1,
+    "senador nacional": 5,
+    "senadores nacionales": 5,
+    "diputado nacional": 3,
+    "diputados nacionales": 3,
+    "parlamentario mercosur distrito nacional": 8,
+    "parlamentario del mercosur distrito nacional": 8,
+    "parlamentario mercosur nacional": 8,
+    "parlamentario mercosur distrito regional": 9,
+    "parlamentario del mercosur distrito regional": 9,
+    "parlamentario mercosur regional": 9,
+
+    # Provincial (BA)
+    "gobernador y vicegobernador": 4,
+    "gobernador": 4,
+    "senador provincial": 2,
+    "senadores": 2,
+    "diputado provincial": 6,
+    "diputados provinciales": 6,
+    "intendente": 7,
+}
+
+def _office_to_idcargo(office: str) -> int | None:
+    key = _norm_office_name(office)
+    return _OFFICE_TO_IDCARGO.get(key)
+
+# --- NUEVO: mapa phase -> idEleccion ---
+# 1=PASO, 2=GENERALES, 3=BALOTAJE
+def _phase_to_ideleccion(phase: str) -> int | None:
+    p = (phase or "").strip().upper()
+    return {"PASO":1, "GENERAL":2, "GENERALES":2, "BALOTAJE":3}.get(p)
+
+# --- NUEVO: builder de json_url (endpoint JSON, no CSV) ---
+def build_json_url(year: str | int, phase: str, office: str) -> str | None:
+    """
+    Estructura:
+      https://resultados.mininterior.gob.ar/api/resultado/totalizado?a%C3%B1o={year}&recuento=Provisorio&idEleccion={1|2|3}&idCargo={...}&idDistrito=2
+    - año: variable
+    - recuento: Provisorio
+    - idDistrito: 2 (fijo)
+    - idEleccion: por phase (PASO=1, GENERALES=2, BALOTAJE=3)
+    - idCargo: por office (mapa arriba)
+    """
+    try:
+        y = int(str(year).strip())
+    except Exception:
+        return None
+    ide = _phase_to_ideleccion(phase)
+    idc = _office_to_idcargo(office)
+    if not ide or not idc:
+        return None
+    # 'año' debe ir URL-encoded; dejamos el carácter tal cual porque FastAPI/clients lo codifican al pedir
+    return (
+        f"https://resultados.mininterior.gob.ar/api/resultado/totalizado?"
+        f"a%C3%B1o={y}&recuento=Provisorio&idEleccion={ide}&idCargo={idc}&idDistrito=2"
+    )
 
 def excel_bytes_to_records(data: bytes) -> List[dict]:
     """
@@ -190,9 +268,98 @@ def write_jsonl(path: Path, items: List[dict]) -> None:
             f.write(json.dumps(it, ensure_ascii=False) + "\n")
 
 # ================= Views =================
+# agrega al inicio del archivo si no está
+# main.py
+import json
+from pathlib import Path
+from fastapi import Request
+from src.helpers.utils import _now_iso
+# asumo que ya existe load_db()
+
+def _norm(s: str) -> str:
+    return (
+        (s or "")
+        .strip()
+        .upper()
+        .replace("Á","A").replace("É","E").replace("Í","I").replace("Ó","O").replace("Ú","U")
+        .replace("Ü","U").replace("Ñ","N")
+    )
+
+# Mapea nombres de "office" del config a aliases posibles en el JSONL
+OFFICE_ALIASES = {
+    "PRESIDENTE Y VICEPRESIDENTE": ["PRESIDENTE Y VICEPRESIDENTE"],
+    "DIPUTADO NACIONAL": ["DIPUTADO NACIONAL", "DIPUTADOS NACIONALES"],
+    "SENADOR NACIONAL": ["SENADOR NACIONAL", "SENADORES NACIONALES"],
+    "PARLAMENTARIO MERCOSUR DISTRITO NACIONAL": ["PARLAMENTARIO MERCOSUR DISTRITO NACIONAL"],
+    "PARLAMENTARIO MERCOSUR DISTRITO REGIONAL": ["PARLAMENTARIO MERCOSUR DISTRITO REGIONAL"],
+    # extendé acá si agregás más offices
+}
+
+def _iter_jsonl(jsonl_path: Path):
+    with jsonl_path.open("r", encoding="utf-8") as fh:
+        for line in fh:
+            s = line.strip()
+            if not s:
+                continue
+            yield json.loads(s)
+
+def _resolve_seats_for_office(lines, office: str) -> int:
+    """
+    Suma 'cantidad_cargos' de líneas cuyo nombre_cargo matchee el 'office'.
+    Filtra por escala 'ARGENTINA' o 'PROVINCIA DE BUENOS AIRES' (según datos provistos).
+    No hace fallback: si no hay match, retorna 0.
+    """
+    officeN = _norm(office)
+    aliases = OFFICE_ALIASES.get(officeN, [officeN])
+
+    total = 0
+    for row in lines:
+        cargoN = _norm(row.get("nombre_cargo", ""))
+        escalaN = _norm(row.get("nombre_escala_territorial", ""))
+        if not cargoN:
+            continue
+
+        if not any(cargoN == a or a in cargoN for a in aliases):
+            continue
+
+        # Filtrado de escala (ajusta si tu JSONL usa otra nomenclatura)
+        if escalaN not in ("ARGENTINA", "PROVINCIA DE BUENOS AIRES"):
+            continue
+
+        cc = row.get("cantidad_cargos", 0)
+        if isinstance(cc, (int, float)) and cc > 0:
+            total += int(cc)
+    return total
+
+def build_seats_ctx(db: dict) -> dict:
+    """
+    Devuelve un dict:
+      { "{year}::{category}::{office}": seats_int, ... }
+    Resuelve seats leyendo el JSONL definido en la categoría (seats_jsonl).
+    """
+    seats_ctx = {}
+    for year, ydata in (db or {}).items():
+        cats = (ydata.get("categories") or {})
+        for cat, cdata in cats.items():
+            seats_jsonl = (cdata or {}).get("seats_jsonl")
+            if not seats_jsonl:
+                continue
+            jsonl_path = Path(seats_jsonl)
+            # Leemos todas las líneas una sola vez por categoría
+            lines = list(_iter_jsonl(jsonl_path))
+
+            phases = (cdata.get("phases") or {})
+            for _, pdata in phases.items():
+                for office, _meta in (pdata.get("entries") or {}).items():
+                    key = f"{year}::{cat}::{office}"
+                    seats_ctx[key] = _resolve_seats_for_office(lines, office)
+    return seats_ctx
+
 @router.get("/")
 async def home(request: Request):
     db = load_db()
+
+    # Construcción de filas para la tabla
     rows = []
     years_set = set()
     phases_set = set()
@@ -212,6 +379,8 @@ async def home(request: Request):
                         "office": office,
                         "method": (meta or {}).get("method"),
                         "url": (meta or {}).get("url"),
+                        "json_url": (meta or {}).get("json_url"),
+                        "seats": (meta or {}).get("seats"),  # puede venir null; el front usará seats_ctx
                         "base_sha256": (meta or {}).get("base_sha256"),
                         "last_calc": (meta or {}).get("last_calc"),
                         "result": (meta or {}).get("result"),
@@ -222,6 +391,12 @@ async def home(request: Request):
     years = sorted(years_set)
     phases = sorted(phases_set)
 
+    # Resolvemos y serializamos el arreglo de seats
+    seats_ctx = build_seats_ctx(db)
+    seats_ctx_json = json.dumps(seats_ctx, ensure_ascii=False)
+
+    print("seats_ctx_json=", seats_ctx_json)
+
     return templates.TemplateResponse(
         "index.html",
         {
@@ -231,8 +406,10 @@ async def home(request: Request):
             "years": years,
             "phases": phases,
             "now": _now_iso(),
+            "seats_ctx_json": seats_ctx_json,
         },
     )
+
 
 # AGREGAR (debajo de otras rutas /elective_office)
 @router.get("/api/calc")
@@ -533,7 +710,6 @@ async def attach_category(
     return RedirectResponse("/elective_office/config", status_code=303)
 
 
-
 @router.post("/config/create_phase")
 async def create_phase(
     year: str = Form(...),
@@ -570,18 +746,59 @@ async def create_phase(
         if office in entries:
             continue
         method_name, _desc = detect_method(cats, methods, election_category, office, phase)
+
+        # NUEVO: calcular json_url según estándares
+        computed_json_url = build_json_url(year, phase, office)
+
         entries[office] = {
             "method": method_name,
             "url": None,
-            "seats": None,            # se puede completar manualmente o derivar del Excel en otra etapa
+            "json_url": computed_json_url,   # <-- NUEVO CAMPO
+            "seats": None,
             "base_sha256": None,
             "last_processed": None,
             "last_calc": None,
             "result": None,
         }
 
+
     save_db(db)
     return RedirectResponse("/elective_office/config", status_code=303)
+
+# Endpoint para recomputar json_url masivamente
+@router.post("/config/rebuild_json_urls")
+async def rebuild_json_urls(
+    year: str = Form(...),
+    election_category: str = Form(...),
+    phase: str | None = Form(None),
+):
+    """
+    Recalcula y guarda 'json_url' para todas las entries del contexto indicado.
+    Si 'phase' es None, procesa todas las fases de la categoría.
+    """
+    db = load_db()
+    try:
+        cat_node = db[year]["categories"][election_category]
+    except KeyError:
+        raise HTTPException(404, "Contexto inexistente en db.json")
+
+    phases = [phase] if phase else list((cat_node.get("phases") or {}).keys())
+    updated = 0
+
+    for ph in phases:
+        pnode = (cat_node.get("phases") or {}).get(ph) or {}
+        entries = pnode.get("entries") or {}
+        for office, meta in entries.items():
+            new_url = build_json_url(year, ph, office)
+            meta["json_url"] = new_url
+            updated += 1
+
+    save_db(db)
+    return RedirectResponse(
+        f"/elective_office/config?flt_year={year}&flt_category={election_category}" + (f"&flt_phase={phase}" if phase else ""),
+        status_code=303,
+    )
+
 
 # --------- 4) CRUD URL ----------
 @router.post("/config/upsert_url")
@@ -949,10 +1166,6 @@ async def preprocess_and_calc(payload: dict = Body(...)):
 async def root():
     return RedirectResponse("/elective_office/")
 
-
-@app.get("/favicon.ico")
-async def favicon():
-    return RedirectResponse("/static/favicon.ico")
 
 
 # Renombrar fase

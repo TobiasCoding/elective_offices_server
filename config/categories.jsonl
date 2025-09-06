@@ -1,7 +1,7 @@
 {"category":"Nacional",    "office":"Presidente y Vicepresidente",  "method":"balotaje",           "paso":true, "general":true, "balotaje":true}
 {"category":"Nacional",    "office":"Diputado Nacional",                    "method":"d-hont",             "paso":true, "general":true, "balotaje":false}
 {"category":"Nacional",    "office":"Senador Nacional",                    "method":"lista-incompleta",   "paso":true, "general":true, "balotaje":false}
-{"category":"Nacional",    "office":"Parlamentario Mercosur Distrito Nacional",    "method":"d-hont",             "paso":true, "general":true, "balotaje":false}
+{"category":"Nacional",    "office":"Parlamentario Mercosur Distrito Nacional",    "method":"proporcional-nacional",             "paso":true, "general":true, "balotaje":false}
 {"category":"Nacional",    "office":"Parlamentario Mercosur Distrito Regional",    "method":"mayoria-simple",     "paso":true, "general":true, "balotaje":false}
 {"category":"Provincial",  "office":"Gobernador y Vicegobernador",  "method":"mayoria-simple",     "paso":true, "general":true, "balotaje":false}
 {"category":"Provincial",  "office":"Diputado Provincial",                    "method":"d-hont",             "paso":true, "general":true, "balotaje":false}
