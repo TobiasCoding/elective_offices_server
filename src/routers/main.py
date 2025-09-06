@@ -28,7 +28,7 @@ router = APIRouter(prefix="/elective_office")
 # ================= Utils =================
 @app.get("/favicon.ico")
 async def favicon():
-    return RedirectResponse("/static/favicon.ico")
+    return RedirectResponse("elective_office/static/favicon.ico")
 
 
 # --- NUEVO: Normalización simple de nombres para mapear cargos ---
