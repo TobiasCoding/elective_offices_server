@@ -1,8 +1,8 @@
 # Elective Office
 
-Servidor FastAPI para calcular distribución de cargos (D'Hondt, Hare, Lista Incompleta, Mayoría Simple).
+Server to calculate distribution of positions (D'Hondt, Hare, Incomplete List, Simple Majority).
 
-## Instalación
+## Instalation
 
 ```bash
 python3 -m venv venv
@@ -10,17 +10,17 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Ejecutar
+## Execute
 
 ```bash
 uvicorn src.routers.main:app --reload --port 8004
 ```
 
-- UI pública: http://localhost:8004/elective_office/
-- UI de configuración: http://localhost:8004/elective_office/config
+- Public UI: http://localhost:8004/elective_office/
+- Configuration UI: http://localhost:8004/elective_office/config
 
-## Archivo con datos de cargos electivos
+## File with data on elective offices
 
-**Columnas:** tipo_escala_territorial, nombre_escala_territorial, numero_seccion_electoral, tipo_cargo, nombre_cargo, cantidad_cargos
+**Columns:** tipo_escala_territorial, nombre_escala_territorial, numero_seccion_electoral, tipo_cargo, nombre_cargo, cantidad_cargos
 
-**Ejemplo:** `datos_cargos_electivos_2023.xlsx`
+**Example:** `datos_cargos_electivos_2023.xlsx`
